@@ -1,0 +1,152 @@
+<!doctype html>
+<html>
+<head>
+<meta charset="utf-8">
+<style>
+  html, body { margin: 0; height: 100%; background: transparent; overflow: hidden; }
+  canvas { display: block; width: 100%; height: 100%; }
+</style>
+</head>
+<body>
+<canvas id="c"></canvas>
+<script src="/core/live2dcubismcore.min.js"></script>
+<script src="/app/pixi.min.js"></script>
+<script src="/app/cubism4.min.js"></script>
+<script>
+// DM 形象：Live2D（Cubism 3/4/5）模型。由 Mac 端通过 window.DM 控制。
+const post = (m) => { try { window.webkit.messageHandlers.dm.postMessage(m); } catch (e) { console.log(m); } };
+window.onerror = (msg) => post({ type: "error", message: String(msg) });
+window.onunhandledrejection = (e) => post({ type: "error", message: String((e.reason && e.reason.message) || e.reason) });
+
+const app = new PIXI.Application({
+  view: document.getElementById("c"), backgroundAlpha: 0, resizeTo: window,
+  antialias: true, autoDensity: true, resolution: window.devicePixelRatio || 1,
+});
+PIXI.live2d.Live2DModel.registerTicker(PIXI.Ticker);
+
+let model = null, base = null, loadId = 0;
+let cfg = { scale: 1, x: 0, y: 0, mirror: false, side: "left" };
+let talking = false, energy = 0, mouth = 0, mouthIds = ["ParamMouthOpenY"];
+let level = 0, levelAt = 0;     // 播放真实音频时的音量（有就按音量对口型）
+let gaze = { x: 0, y: 0 }, gazeTarget = { x: 0, y: 0 }, nextGlance = 0;
+
+function layout() {
+  if (!model || !base) return;
+  const W = app.screen.width, H = app.screen.height;
+  const s = Math.min(W / base.w, H / base.h) * cfg.scale;
+  model.scale.set(cfg.mirror ? -s : s, s);
+  model.position.set(W / 2 + cfg.x * W, H / 2 + cfg.y * H);
+}
+app.renderer.on("resize", layout);
+
+let gesture = null;          // 没有动作文件的模型（比如 VTube Studio 导出的）用程序做点头/歪头
+let expressions = [];
+
+async function load(url, extraExpressions) {
+  const id = ++loadId;
+  if (model) { app.stage.removeChild(model); model.destroy(); model = null; }
+  if (!url) { post({ type: "cleared" }); return; }
+  post({ type: "loading" });
+  // 读出 model3.json，把文件夹里有、但 json 里没登记的表情（.exp3.json）补进去
+  const json = await (await fetch(url)).json();
+  json.url = url;
+  const refs = json.FileReferences = json.FileReferences || {};
+  if ((!refs.Expressions || !refs.Expressions.length) && extraExpressions && extraExpressions.length) {
+    refs.Expressions = extraExpressions.map((f) => ({ Name: f.replace(/^.*\//, "").replace(/\.exp3\.json$/, ""), File: f }));
+  }
+  const m = await PIXI.live2d.Live2DModel.from(json, { autoInteract: false });
+  if (id !== loadId) { m.destroy(); return; }
+  model = m;
+  model.anchor.set(0.5, 0.5);
+  model.scale.set(1);
+  base = { w: model.width, h: model.height };
+  app.stage.addChild(model);
+  layout();
+
+  // 嘴型参数：优先用模型里 LipSync 分组定义的
+  const group = (json.Groups || []).find((g) => g.Name === "LipSync" && g.Ids && g.Ids.length);
+  mouthIds = group ? group.Ids : ["ParamMouthOpenY"];
+  const core = model.internalModel.coreModel;
+  model.internalModel.on("beforeModelUpdate", () => {
+    for (const pid of mouthIds) {
+      try { core.setParameterValueById(pid, mouth); } catch (e) {}
+    }
+    if (gesture) {
+      const p = (performance.now() - gesture.start) / gesture.dur;
+      if (p >= 1) gesture = null;
+      else {
+        const w = Math.sin(p * Math.PI);                          // 0 → 1 → 0
+        try {
+          if (gesture.kind === "nod") core.addParameterValueById("ParamAngleY", -18 * Math.sin(p * Math.PI * 2) * (1 - p));
+          else core.addParameterValueById("ParamAngleZ", gesture.dir * 12 * w);
+          core.addParameterValueById("ParamBodyAngleX", gesture.dir * 3 * w);
+        } catch (e) {}
+      }
+    }
+  });
+  const motions = Object.keys(refs.Motions || {});
+  expressions = (refs.Expressions || []).map((e) => e.Name);
+  post({ type: "loaded", motions, expressions });
+}
+
+// 每帧：嘴型 + 视线
+app.ticker.add(() => {
+  const t = performance.now() / 1000;
+  energy *= 0.84;
+  let target = energy * 0.9;
+  if (performance.now() - levelAt < 200) target = Math.min(1, Math.pow(level, 0.8) * 1.15);
+  else if (talking) target = Math.max(target, 0.18 + 0.55 * Math.abs(Math.sin(t * 10.5)) * (0.65 + 0.35 * Math.sin(t * 3.1)));
+  mouth += (target - mouth) * 0.5;
+  if (mouth < 0.01) mouth = 0;
+
+  if (!model) return;
+  if (t > nextGlance) {      // 时不时换个地方看，说话时多看向字幕那边
+    const toText = cfg.side === "left" ? 1 : -1;
+    gazeTarget = talking ? { x: toText * (0.25 + Math.random() * 0.3), y: -0.05 + Math.random() * 0.15 }
+                         : { x: (Math.random() - 0.5) * 0.8, y: (Math.random() - 0.5) * 0.4 };
+    nextGlance = t + 1.5 + Math.random() * 3.5;
+  }
+  gaze.x += (gazeTarget.x - gaze.x) * 0.04;
+  gaze.y += (gazeTarget.y - gaze.y) * 0.04;
+  const W = app.screen.width, H = app.screen.height;
+  model.focus(model.x + gaze.x * W, model.y - H * 0.15 + gaze.y * H, false);
+});
+
+function motion(prefer) {
+  if (!model) return;
+  const groups = Object.keys(model.internalModel.motionManager.definitions || {});
+  const order = [prefer, "TapBody", "Tap", "tap_body", "FlickHead", "Flick", "Shake", "Flick@Body"].filter(Boolean);
+  const g = order.find((x) => groups.includes(x)) || groups.find((x) => !/idle/i.test(x));
+  if (g) { model.motion(g, undefined, 3); return; }
+  // 没有动作文件：点个头或者歪一下头
+  gesture = { kind: Math.random() < 0.6 ? "nod" : "tilt", dir: Math.random() < 0.5 ? -1 : 1, start: performance.now(), dur: 1100 };
+}
+
+// 心情：按表情名字里的关键词找（笑/泪……），找不到就算了
+const MOOD = {
+  happy: /笑|smile|happy|joy|开心|喜/i,
+  sad: /泪|哭|cry|tear|sad|伤/i,
+  think: /眯|思|think|doubt|疑/i,
+};
+function mood(kind) {
+  if (!model) return;
+  const em = model.internalModel.motionManager.expressionManager;
+  if (kind === "neutral" || !MOOD[kind]) { if (em) em.resetExpression(); return; }
+  const name = expressions.find((n) => MOOD[kind].test(n));
+  if (name) model.expression(name);
+}
+
+window.DM = {
+  load: (url, exprs) => load(url, exprs).catch((e) => post({ type: "error", message: String((e && e.message) || e) })),
+  mood,
+  configure: (c) => { cfg = Object.assign(cfg, c); layout(); },
+  talking: (b) => { talking = !!b; },
+  pulse: () => { energy = Math.max(energy, 0.65 + Math.random() * 0.35); },
+  level: (v) => { level = v; levelAt = performance.now(); },
+  motion,
+  expression: (name) => model && model.expression(name),
+};
+post({ type: "ready" });
+</script>
+</body>
+</html>
