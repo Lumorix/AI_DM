@@ -2,6 +2,7 @@
 // 克隆音色要先用 10~20 秒的样本音频在自己的百炼账号里“创建音色”，拿到音色 ID 后才能合成。
 // 音色 ID 只在创建它的那个账号里能用，别人项目里的 ID 换成你的 Key 一般用不了。
 import AVFoundation
+import CryptoKit
 import Foundation
 
 struct VoiceSettings: Codable, Equatable {
@@ -15,6 +16,9 @@ struct VoiceSettings: Codable, Equatable {
     enum Region: String, Codable { case cn, intl }
 
     var base: String { region == .cn ? "https://dashscope.aliyuncs.com" : "https://dashscope-intl.aliyuncs.com" }
+
+    /// yachiyo-qwen-voice-reply 项目里写的八千代音色（作者在国际站创建的，多半只限作者的账号使用）
+    static let yachiyoProjectVoice = "qwen-tts-vc-yachiyo-voice-20260224022238839-5679"
     var usable: Bool { engine == .qwen && !voice.isEmpty && !model.isEmpty }
 }
 
@@ -134,5 +138,104 @@ final class ClipPlayer: NSObject, AVAudioPlayerDelegate {
 
     nonisolated func audioPlayerDecodeErrorDidOccur(_ p: AVAudioPlayer, error: Error?) {
         Task { @MainActor in self.finish() }
+    }
+}
+
+// MARK: - 本机语音缓存：合成过的句子存成文件，下次直接播放（不用联网、不再花钱）
+
+
+
+enum VoiceCache {
+    static var dir: URL {
+        let u = Paths.support.appendingPathComponent("VoiceCache", isDirectory: true)
+        try? FileManager.default.createDirectory(at: u, withIntermediateDirectories: true)
+        return u
+    }
+
+    static func file(_ text: String, _ cfg: VoiceSettings) -> URL {
+        let raw = "\(cfg.model)|\(cfg.voice)|\(cfg.language)|\(text)"
+        let hex = SHA256.hash(data: Data(raw.utf8)).map { String(format: "%02x", $0) }.joined()
+        return dir.appendingPathComponent(hex + ".audio")
+    }
+
+    static func get(_ text: String, _ cfg: VoiceSettings) -> Data? { try? Data(contentsOf: file(text, cfg)) }
+    static func has(_ text: String, _ cfg: VoiceSettings) -> Bool { FileManager.default.fileExists(atPath: file(text, cfg).path) }
+    static func put(_ data: Data, _ text: String, _ cfg: VoiceSettings) { try? data.write(to: file(text, cfg), options: .atomic) }
+
+    static var usage: (files: Int, bytes: Int) {
+        let fs = (try? FileManager.default.contentsOfDirectory(at: dir, includingPropertiesForKeys: [.fileSizeKey])) ?? []
+        return (fs.count, fs.reduce(0) { $0 + ((try? $1.resourceValues(forKeys: [.fileSizeKey]).fileSize) ?? 0) })
+    }
+
+    static func clear() {
+        for f in (try? FileManager.default.contentsOfDirectory(at: dir, includingPropertiesForKeys: nil)) ?? [] {
+            try? FileManager.default.removeItem(at: f)
+        }
+    }
+
+    /// 合成一句：先查本机缓存，没有再调接口并存下来
+    static func synthesize(_ text: String, cfg: VoiceSettings, key: String) async throws -> Data {
+        if let d = get(text, cfg) { return d }
+        let d = try await QwenTTS.synthesize(text, cfg: cfg, key: key)
+        put(d, text, cfg)
+        return d
+    }
+}
+
+/// 把一段话切成一句一句（和大屏朗读时的切法完全一致，提前生成的语音才能对上）
+enum Sentences {
+    static let pattern = "[\\s\\S]*?[。！？!?\\n…]+"
+
+    static func split(_ text: String) -> [String] {
+        var buf = text, out: [String] = []
+        while let r = buf.range(of: pattern, options: .regularExpression) {
+            out.append(String(buf[r]))
+            buf.removeSubrange(r)
+        }
+        out.append(buf)
+        return out.map { $0.trimmingCharacters(in: .whitespacesAndNewlines) }.filter { !$0.isEmpty }
+    }
+}
+
+/// 提前把整本剧本的主持词用克隆音色生成好、存到本机
+enum VoicePregen {
+    static func lines(of script: Script) -> [String] {
+        var seen = Set<String>(), out: [String] = []
+        for p in script.phases {
+            for s in Sentences.split(p.dmScript) where seen.insert(s).inserted { out.append(s) }
+        }
+        return out
+    }
+
+    /// 北京地域 ¥0.115 / 万字符（国际站 $0.115），只是估算
+    static func estimate(_ lines: [String], _ cfg: VoiceSettings) -> String {
+        let chars = lines.reduce(0) { $0 + $1.count }
+        let cost = Double(chars) / 10000 * 0.115
+        return "\(chars) 字，约 \(cfg.region == .cn ? "¥" : "$")\(String(format: "%.2f", max(cost, 0.01)))"
+    }
+
+    static func run(_ lines: [String], cfg: VoiceSettings, key: String, concurrency: Int = 3,
+                    progress: @escaping @Sendable (Int, Int, String?) -> Void) async {
+        let todo = lines.filter { !VoiceCache.has($0, cfg) }
+        let total = todo.count
+        let counter = Counter()
+        await withTaskGroup(of: Void.self) { group in
+            var next = 0
+            func add(_ line: String) {
+                group.addTask {
+                    var err: String?
+                    do { _ = try await VoiceCache.synthesize(line, cfg: cfg, key: key) } catch {
+                        err = error.localizedDescription
+                    }
+                    let n = await counter.increment()
+                    progress(n, total, err)
+                }
+            }
+            while next < min(concurrency, total) { add(todo[next]); next += 1 }
+            while await group.next() != nil {
+                if Task.isCancelled { group.cancelAll(); break }
+                if next < total { add(todo[next]); next += 1 }
+            }
+        }
     }
 }

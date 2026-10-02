@@ -345,7 +345,7 @@ final class AppModel {
                 try state.save(to: savePath)
             }
             var gs = settings.game
-            gs.narration = settings.game.narration
+            if let n = script.narration { gs.narration = n }      // 剧本指定了旁白方式就按剧本
             let game = Game(script: script, state: state, llm: llm, cheap: cheap, settings: gs, savePath: savePath)
             game.speech = narrator
             let router = WebRouter(game: game, webRoot: Paths.web)

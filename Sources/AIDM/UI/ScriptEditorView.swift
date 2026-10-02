@@ -248,6 +248,15 @@ private struct OverviewForm: View {
                 InkEditor(text: $script.truth, minHeight: 220)
             }
             Field(title: "主持风格") { InkEditor(text: $script.style, minHeight: 70) }
+            Field(title: "旁白方式", hint: "原文照念：DM 一字不改地念主持词（文字精心写过的剧本推荐）；AI 润色：AI 改得更口语、有氛围") {
+                Picker("", selection: Binding(get: { script.narration?.rawValue ?? "" },
+                                             set: { script.narration = GameSettings.NarrationMode(rawValue: $0) })) {
+                    Text("跟随设置").tag("")
+                    Text("原文照念").tag("verbatim")
+                    Text("AI 润色").tag("ai")
+                }
+                .pickerStyle(.segmented).labelsHidden().frame(width: 300)
+            }
             Field(title: "防剧透禁用词", hint: "用逗号分隔。AI 的回复里出现这些说法会被拦截重答。写成“说法@阶段id”表示到那个阶段才解禁") {
                 InkEditor(text: listBinding($script.forbidden), minHeight: 50)
             }

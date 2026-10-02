@@ -184,7 +184,7 @@ final class Narrator: NSObject, SpeechSink, ObservableObject, AVSpeechSynthesize
         let cfg = voiceConfig, key = voiceKey
         return Task {
             do {
-                return (text, try await QwenTTS.synthesize(text, cfg: cfg, key: key))
+                return (text, try await VoiceCache.synthesize(text, cfg: cfg, key: key))
             } catch {
                 await MainActor.run { self.lastError = "八千代音色合成失败，临时改用系统声音：\(error.localizedDescription)" }
                 return (text, nil)
@@ -269,7 +269,7 @@ final class Narrator: NSObject, SpeechSink, ObservableObject, AVSpeechSynthesize
     func streamDelta(_ text: String) {
         guard enabled else { avatar.send(.pulse); return }
         buf += text
-        while let r = buf.range(of: "[\\s\\S]*?[。！？!?\\n…]+", options: .regularExpression) {
+        while let r = buf.range(of: Sentences.pattern, options: .regularExpression) {
             say(String(buf[r]))
             buf.removeSubrange(r)
         }

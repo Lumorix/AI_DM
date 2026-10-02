@@ -98,6 +98,7 @@ struct Script: Equatable {
     var style = ""
     var forbidden: [String] = []
     var forbiddenUntil: String? = nil   // 从这个阶段开始不再拦截禁用词（默认是第一个 reveal 阶段）
+    var narration: GameSettings.NarrationMode? = nil   // 剧本指定的旁白方式（verbatim = 原文照念），不写就用设置里的
     var characters: [Character] = []
     var clues: [Clue] = []
     var phases: [Phase] = []
@@ -257,6 +258,7 @@ enum ScriptIO {
             players: meta.int("players") > 0 ? meta.int("players") : characters.count,
             truth: dm.str("truth"), style: dm.str("style"), forbidden: dm.list("forbidden"),
             forbiddenUntil: dm.str("forbidden_until").isEmpty ? nil : dm.str("forbidden_until"),
+            narration: GameSettings.NarrationMode(rawValue: dm.str("narration")),
             characters: characters, clues: clues, phases: phases, endings: endings)
         let errors = validate(script).filter { $0.level == .error }
         if !errors.isEmpty {
@@ -351,6 +353,7 @@ enum ScriptIO {
         var dmPairs: [(String, Node)] = [("truth", str(s.truth)), ("style", str(s.style)),
                                          ("forbidden", Node(s.forbidden.map(str)))]
         if let f = s.forbiddenUntil, !f.isEmpty { dmPairs.append(("forbidden_until", str(f))) }
+        if let n = s.narration { dmPairs.append(("narration", str(n.rawValue))) }
         root["dm"] = map(dmPairs)
         root["characters"] = Node(s.characters.map { c in
             map([("id", str(c.id)), ("name", str(c.name)), ("public", str(c.publicInfo)),

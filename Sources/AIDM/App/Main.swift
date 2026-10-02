@@ -11,6 +11,12 @@ enum Entry {
             CLI.ocr(Array(args.dropFirst()))
             exit(0)
         }
+        if args.first == "--voice-lines", args.count > 1, let s = try? ScriptIO.load(URL(fileURLWithPath: args[1])) {
+            let ls = VoicePregen.lines(of: s)
+            print("\(ls.count) 句，\(VoicePregen.estimate(ls, VoiceSettings()))")
+            ls.prefix(6).forEach { print(" · \($0)") }
+            exit(0)
+        }
         if args.first == "--check", args.count > 1 {
             exit(CLI.check(URL(fileURLWithPath: args[1]), rewrite: args.contains("--rewrite")))
         }

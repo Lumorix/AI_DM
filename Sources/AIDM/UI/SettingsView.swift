@@ -178,6 +178,7 @@ private struct VoiceForm: View {
     @State private var busy = false
     @State private var message: (ok: Bool, text: String)?
     @State private var voices: [QwenTTS.VoiceInfo] = []
+    @State private var presetNote: String?
 
     var body: some View {
         @Bindable var model = model
@@ -216,10 +217,20 @@ private struct VoiceForm: View {
                         Text("国际（新加坡）").tag(VoiceSettings.Region.intl)
                     }
                     TextField("音色 ID", text: $model.settings.voice.voice, prompt: Text("qwen-tts-vc-…"))
+                    Button("使用 yachiyo 项目里的八千代音色") {
+                        model.settings.voice.voice = VoiceSettings.yachiyoProjectVoice
+                        model.settings.voice.model = "qwen3-tts-vc-2026-01-22"
+                        model.settings.voice.region = .intl
+                        model.settings.voice.language = "Chinese"
+                        presetNote = "已填入 yachiyo-qwen-voice-reply 项目里的音色 ID（国际站）。填好百炼 Key 后点上面的“试听”。如果提示音色不存在，说明这个音色只能在作者的账号里用，需要在下面用你自己的录音创建一个。"
+                    }
                     Picker("说话语言", selection: $model.settings.voice.language) {
                         Text("中文").tag("Chinese"); Text("日语").tag("Japanese"); Text("英语").tag("English")
                     }
                     TextField("合成模型", text: $model.settings.voice.model)
+                    if let n = presetNote {
+                        Label(n, systemImage: "info.circle.fill").foregroundStyle(.secondary).font(.callout)
+                    }
                 } header: { Text("百炼账号") } footer: {
                     Text("在阿里云百炼控制台（bailian.console.aliyun.com）开通服务、创建 API Key。Key 和地区要对应：国内账号选中国，国际站账号选国际。Key 保存在 macOS 钥匙串里。AI 主持如果用的是通义千问，这里可以不填，会自动借用那个 Key。")
                 }
@@ -257,6 +268,7 @@ private struct VoiceForm: View {
                 } header: { Text("创建八千代的音色") } footer: {
                     Text("音色 ID 只在创建它的账号里能用，别人项目里的 ID 换成你的 Key 一般用不了，所以要用你自己的账号创建一次：准备一段 10~20 秒、清晰、没有背景音乐、只有一个人说话的八千代台词录音（wav/mp3/m4a，小于 10MB），选好后点“创建克隆音色”，成功后音色 ID 会自动填好。克隆音色请仅用于个人娱乐。")
                 }
+                PregenSection()
             }
         }
         .formStyle(.grouped)
@@ -439,5 +451,74 @@ private struct AvatarForm: View {
         p.message = "选择 Live2D 模型文件夹、.model3.json 文件或 .zip 压缩包"
         p.prompt = "导入"
         if p.runModal() == .OK, let u = p.url { model.importAvatar(u) }
+    }
+}
+
+/// 提前生成整本剧本的语音，存到本机
+private struct PregenSection: View {
+    @Environment(AppModel.self) private var model
+    @State private var scriptID = ""
+    @State private var running = false
+    @State private var done = 0
+    @State private var total = 0
+    @State private var errors: [String] = []
+    @State private var task: Task<Void, Never>?
+    @State private var refresh = 0
+
+    private var entries: [ScriptEntry] { model.library.filter { $0.script != nil } }
+    private var script: Script? { (entries.first { $0.id == scriptID } ?? entries.first)?.script }
+    private var lines: [String] { script.map(VoicePregen.lines) ?? [] }
+
+    var body: some View {
+        let cfg = model.settings.voice
+        let cached = lines.filter { VoiceCache.has($0, cfg) }.count
+        let usage = VoiceCache.usage
+        Section {
+            Picker("剧本", selection: Binding(get: { scriptID.isEmpty ? (entries.first?.id ?? "") : scriptID }, set: { scriptID = $0 })) {
+                ForEach(entries) { e in Text(e.title).tag(e.id) }
+            }
+            LabeledContent("主持词") {
+                Text("\(lines.count) 句 · \(VoicePregen.estimate(lines, cfg)) · 已保存 \(cached) 句").foregroundStyle(.secondary)
+            }
+            .id(refresh)
+            HStack {
+                if running {
+                    ProgressView(value: Double(done), total: Double(max(total, 1))).frame(width: 160)
+                    Text("\(done)/\(total)").font(.caption.monospacedDigit())
+                    Button("停止") { task?.cancel() }
+                } else {
+                    Button(cached == lines.count && !lines.isEmpty ? "已全部保存" : "生成并保存到本机") { start() }
+                        .disabled(!cfg.usable || model.dashscopeKey.isEmpty || lines.isEmpty || cached == lines.count)
+                }
+                Spacer()
+                Button("打开语音文件夹") { NSWorkspace.shared.open(VoiceCache.dir) }
+            }
+            if !errors.isEmpty {
+                Text("有 \(errors.count) 句失败（下次再点会重试）：\(errors.last ?? "")").font(.caption).foregroundStyle(.red)
+            }
+            LabeledContent("本机已保存") {
+                HStack {
+                    Text("\(usage.files) 句 · \(ByteCountFormatter.string(fromByteCount: Int64(usage.bytes), countStyle: .file))").foregroundStyle(.secondary)
+                    Button("清空") { VoiceCache.clear(); refresh += 1 }.disabled(usage.files == 0 || running)
+                }
+            }
+        } header: { Text("提前生成并保存到本机") } footer: {
+            Text("把整本剧本的主持词用上面的音色一次性生成好，存成音频文件放在本机。之后开局直接播放本机文件：不用等网络、也不会重复花钱。剧本用“原文照念”时最合适（AI 临场回答的话还是实时合成）。换了音色 ID 需要重新生成。")
+        }
+    }
+
+    private func start() {
+        let ls = lines, cfg = model.settings.voice, key = model.dashscopeKey
+        running = true; done = 0; total = ls.filter { !VoiceCache.has($0, cfg) }.count; errors = []
+        task = Task {
+            await VoicePregen.run(ls, cfg: cfg, key: key) { n, _, err in
+                Task { @MainActor in
+                    done = n
+                    if let err { errors.append(err) }
+                }
+            }
+            running = false
+            refresh += 1
+        }
     }
 }
