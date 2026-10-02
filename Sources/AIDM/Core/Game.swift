@@ -355,6 +355,47 @@ final class Game {
         return postAnswer(charId, reply: reply, give: give, isPublic: isPublic)
     }
 
+    /// 在电脑上直接问 DM（不需要选角色）：问题和回答都公开，DM 用语音念出来
+    private(set) var tableBusy = false
+
+    func askTable(_ raw: String) async -> ActionResult {
+        let question = String(raw.trimmingCharacters(in: .whitespacesAndNewlines).prefix(500))
+        guard !question.isEmpty else { return .fail("问题是空的") }
+        guard !tableBusy else { return .fail("DM还在回答上一个问题") }
+        state.logPublic(.ask, "提问", question, phase: phase.id)
+        changed()
+        if state.aiPaused {
+            let r = "DM暂时离开了，请稍后再问。"
+            state.logPublic(.answer, "DM", r, phase: phase.id)
+            changed()
+            return ActionResult(ok: true, extra: ["reply": r])
+        }
+        tableBusy = true
+        speech?.thinking(true)
+        defer { tableBusy = false; speech?.thinking(false) }
+        var reply = ""
+        for attempt in 0..<2 {
+            let msgs = Prompts.askTable(script, state, phase, question: question, recent: settings.keepRecent, strict: attempt > 0)
+            do {
+                let data = parseJSONReply(try await llm.chat(msgs, maxTokens: 800))
+                reply = (data["reply"].map { ($0 as? String) ?? "\($0)" } ?? "").trimmingCharacters(in: .whitespacesAndNewlines)
+                if reply.isEmpty { reply = "……" }
+            } catch {
+                state.warn("AI回答失败：\(error.localizedDescription)")
+                reply = "（DM这边网络有点问题，请稍后再问一次）"
+                break
+            }
+            guard let leak = leaks(reply) else { break }
+            state.warn("拦截了一次可能的剧透（当面提问：\(question.prefix(30))；命中「\(leak)」）")
+            reply = "这个问题现在还不能回答。继续推理吧。"
+        }
+        state.logPublic(.answer, "DM", reply, phase: phase.id)
+        changed()
+        speech?.say(reply)
+        Task { await maybeSummarize() }
+        return ActionResult(ok: true, extra: ["reply": reply])
+    }
+
     private func postAnswer(_ charId: String, reply: String, give: String?, isPublic: Bool) -> ActionResult {
         let ph = phase.id
         if isPublic {

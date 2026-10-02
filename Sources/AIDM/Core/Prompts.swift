@@ -96,6 +96,19 @@ enum Prompts {
                 .user(dyn.filter { !$0.isEmpty }.joined(separator: "\n\n"))]
     }
 
+    /// 在电脑前当面问 DM（不属于某个角色，所有人都能看到回答）
+    static func askTable(_ script: Script, _ state: GameState, _ phase: Phase, question: String, recent: Int, strict: Bool = false) -> [ChatMessage] {
+        let dyn: [String] = [
+            phaseBlock(script, state, phase),
+            memoryBlock(state, recent: recent),
+            "【这是在场的人当面问你】问题和回答所有人都能看到。不要透露任何一个角色的私人秘密，也不要发放线索。",
+            strict ? "【特别警告】你上一次的回答涉嫌泄露真相，已被拦截。这次务必只给不涉及真相的回答。" : "",
+            "只输出一个JSON，不要其他文字：{\"reply\": \"你要说的话\"}",
+            "问题：\(question)",
+        ]
+        return [.system(staticSystem(script, task: "问答")), .user(dyn.filter { !$0.isEmpty }.joined(separator: "\n\n"))]
+    }
+
     // MARK: 旁白（不需要真相和主持提示，不给就不会说漏）
 
     static func narration(_ script: Script, _ state: GameState, _ phase: Phase, text: String) -> [ChatMessage] {

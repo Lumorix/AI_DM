@@ -556,7 +556,13 @@ private struct LocalVoiceSection: View {
                             Image(systemName: model.settings.voice.localVoice == v ? "largecircle.fill.circle" : "circle")
                                 .foregroundStyle(model.settings.voice.localVoice == v ? Color.accentColor : .secondary)
                             VStack(alignment: .leading, spacing: 2) {
-                                Text(v)
+                                HStack(spacing: 6) {
+                                    Text(v)
+                                    if LocalTTS.isSoVITS(v) {
+                                        Text("训练模型").font(.caption2).padding(.horizontal, 6).padding(.vertical, 1)
+                                            .background(Color.accentColor.opacity(0.2), in: Capsule())
+                                    }
+                                }
                                 Text(refText(v)).font(.caption).foregroundStyle(.secondary).lineLimit(1)
                             }
                             Spacer()
@@ -580,7 +586,8 @@ private struct LocalVoiceSection: View {
         }
         .onAppear {
             voices = LocalTTS.voices()
-            if model.settings.voice.localVoice.isEmpty, let v = voices.first(where: { $0.hasSuffix("综合") }) ?? voices.first {
+            if model.settings.voice.localVoice.isEmpty,
+               let v = voices.first(where: LocalTTS.isSoVITS) ?? voices.first(where: { $0.hasSuffix("综合") }) ?? voices.first {
                 model.settings.voice.localVoice = v
             }
         }

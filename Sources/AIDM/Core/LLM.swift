@@ -235,7 +235,7 @@ private func mockReply(_ messages: [ChatMessage]) -> String {
     let sys = messages.first?.text ?? ""
     let last = messages.last?.text ?? ""
     if sys.contains("【任务：问答】") {
-        let q = String((last.components(separatedBy: "玩家的问题：").last ?? "").trimmingCharacters(in: .whitespacesAndNewlines).prefix(60))
+        let q = String((last.components(separatedBy: "问题：").last ?? "").trimmingCharacters(in: .whitespacesAndNewlines).prefix(60))
         let reply = "（模拟回答）关于“\(q)”，剧本中没有更多可以告诉你的。"
         let d = try? JSONSerialization.data(withJSONObject: ["reply": reply, "give_clue": NSNull()])
         return d.map { String(decoding: $0, as: UTF8.self) } ?? reply

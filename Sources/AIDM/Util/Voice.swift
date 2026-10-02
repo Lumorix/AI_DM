@@ -37,7 +37,7 @@ struct VoiceSettings: Codable, Equatable {
         switch engine {
         case .system: false
         case .qwen: !voice.isEmpty && !model.isEmpty
-        case .local: LocalTTS.isInstalled && LocalTTS.voiceExists(localVoice)
+        case .local: LocalTTS.voiceExists(localVoice) && (LocalTTS.isSoVITS(localVoice) ? SoVITSService.isInstalled : LocalTTS.isInstalled)
         }
     }
 
@@ -366,6 +366,10 @@ final class LocalTTS {
         return fm.isExecutableFile(atPath: python.path) && fm.fileExists(atPath: model.appendingPathComponent("config.json").path)
     }
 
+    nonisolated static func isSoVITS(_ rel: String) -> Bool {
+        FileManager.default.fileExists(atPath: voicesDir.appendingPathComponent(rel).appendingPathComponent("sovits.json").path)
+    }
+
     nonisolated static func voiceExists(_ rel: String) -> Bool {
         !rel.isEmpty && FileManager.default.fileExists(atPath: voicesDir.appendingPathComponent(rel).appendingPathComponent("ref.wav").path)
     }
@@ -430,6 +434,7 @@ final class LocalTTS {
     func stop() {
         process?.terminate()
         process = nil
+        SoVITSService.shared.stop()
     }
 
     private func healthy() async -> Bool {
@@ -439,6 +444,9 @@ final class LocalTTS {
     }
 
     func synthesize(_ text: String, voice: String) async throws -> Data {
+        if Self.isSoVITS(voice) {        // 训练好的 GPT-SoVITS 音色
+            return try await SoVITSService.shared.synthesize(text, voiceDir: Self.voicesDir.appendingPathComponent(voice))
+        }
         try await ensureRunning(voice: voice)
         var r = URLRequest(url: URL(string: "http://127.0.0.1:\(Self.port)/tts")!, timeoutInterval: 120)
         r.httpMethod = "POST"
@@ -447,6 +455,134 @@ final class LocalTTS {
         let (data, resp) = try await URLSession.shared.data(for: r)
         guard (resp as? HTTPURLResponse)?.statusCode == 200, data.count > 1000 else {
             throw LLMError(message: "本机语音合成失败：\(String(decoding: data.prefix(300), as: UTF8.self))")
+        }
+        return data
+    }
+}
+
+// MARK: - 本机训练的音色（GPT-SoVITS）：音色文件夹里有 sovits.json 就走这里
+
+struct SoVITSProfile: Codable, Equatable {
+    var gpt: String              // 训练好的 GPT 权重（.ckpt）
+    var sovits: String           // 训练好的 SoVITS 权重（.pth）
+    var refText: String          // ref.wav 里说的原话
+    var refLang: String = "ja"   // ref.wav 的语言
+    var textLang: String = "zh"  // 要说的语言
+    var device: String = "cpu"
+}
+
+@MainActor
+final class SoVITSService {
+    static let shared = SoVITSService()
+    nonisolated static let port = 9880
+    nonisolated static var dir: URL { LocalTTS.root.appendingPathComponent("GPT-SoVITS") }
+    nonisolated static var python: URL { LocalTTS.root.appendingPathComponent("sovits-venv/bin/python") }
+    nonisolated static var isInstalled: Bool {
+        FileManager.default.isExecutableFile(atPath: python.path)
+            && FileManager.default.fileExists(atPath: dir.appendingPathComponent("api_v2.py").path)
+    }
+
+    nonisolated static func profile(_ voiceDir: URL) -> SoVITSProfile? {
+        guard let d = try? Data(contentsOf: voiceDir.appendingPathComponent("sovits.json")) else { return nil }
+        return try? JSONDecoder().decode(SoVITSProfile.self, from: d)
+    }
+
+    private var process: Process?
+    private var loaded: SoVITSProfile?
+    private var starting: Task<Void, Error>?
+    private(set) var log = ""
+
+    func stop() {
+        process?.terminate()
+        process = nil
+        loaded = nil
+    }
+
+    private func healthy() async -> Bool {
+        // api_v2 没有 /health，用 /docs 判断服务是否起来了
+        var r = URLRequest(url: URL(string: "http://127.0.0.1:\(Self.port)/docs")!, timeoutInterval: 2)
+        r.httpMethod = "GET"
+        return ((try? await URLSession.shared.data(for: r))?.1 as? HTTPURLResponse)?.statusCode == 200
+    }
+
+    private func ensureRunning(_ p: SoVITSProfile, voiceDir: URL) async throws {
+        if process?.isRunning == true, await healthy() {
+            if loaded != p { try await switchWeights(p) }
+            return
+        }
+        if let starting { return try await starting.value }
+        let t = Task { try await start(p, voiceDir: voiceDir) }
+        starting = t
+        defer { starting = nil }
+        try await t.value
+    }
+
+    private func start(_ p: SoVITSProfile, voiceDir: URL) async throws {
+        guard Self.isInstalled else { throw LLMError(message: "GPT-SoVITS 还没装好") }
+        stop()
+        let cfg = """
+        custom:
+          bert_base_path: GPT_SoVITS/pretrained_models/chinese-roberta-wwm-ext-large
+          cnhuhbert_base_path: GPT_SoVITS/pretrained_models/chinese-hubert-base
+          device: \(p.device)
+          is_half: false
+          t2s_weights_path: \(p.gpt)
+          version: v2ProPlus
+          vits_weights_path: \(p.sovits)
+        """
+        let cfgURL = voiceDir.appendingPathComponent("tts_infer.yaml")
+        try cfg.write(to: cfgURL, atomically: true, encoding: .utf8)
+        let proc = Process()
+        proc.executableURL = Self.python
+        proc.currentDirectoryURL = Self.dir
+        proc.arguments = ["-s", "api_v2.py", "-a", "127.0.0.1", "-p", "\(Self.port)", "-c", cfgURL.path]
+        var env = ProcessInfo.processInfo.environment
+        env["PYTHONPATH"] = Self.dir.path + ":" + Self.dir.appendingPathComponent("GPT_SoVITS").path
+        env["HF_HUB_OFFLINE"] = "1"
+        env["TRANSFORMERS_OFFLINE"] = "1"
+        proc.environment = env
+        let pipe = Pipe()
+        proc.standardOutput = pipe
+        proc.standardError = pipe
+        pipe.fileHandleForReading.readabilityHandler = { [weak self] h in
+            let s = String(decoding: h.availableData, as: UTF8.self)
+            Task { @MainActor in self?.log = String(((self?.log ?? "") + s).suffix(4000)) }
+        }
+        try proc.run()
+        process = proc
+        for _ in 0..<240 {                       // 最多等 2 分钟
+            try await Task.sleep(nanoseconds: 500_000_000)
+            if !proc.isRunning { throw LLMError(message: "GPT-SoVITS 服务启动失败：\(log.suffix(300))") }
+            if await healthy() { loaded = p; return }
+        }
+        throw LLMError(message: "GPT-SoVITS 服务启动超时")
+    }
+
+    private func switchWeights(_ p: SoVITSProfile) async throws {
+        for (ep, path) in [("set_gpt_weights", p.gpt), ("set_sovits_weights", p.sovits)] {
+            var c = URLComponents(string: "http://127.0.0.1:\(Self.port)/\(ep)")!
+            c.queryItems = [URLQueryItem(name: "weights_path", value: path)]
+            _ = try await URLSession.shared.data(from: c.url!)
+        }
+        loaded = p
+    }
+
+    func synthesize(_ text: String, voiceDir: URL) async throws -> Data {
+        guard let p = Self.profile(voiceDir) else { throw LLMError(message: "音色配置不完整") }
+        try await ensureRunning(p, voiceDir: voiceDir)
+        var r = URLRequest(url: URL(string: "http://127.0.0.1:\(Self.port)/tts")!, timeoutInterval: 180)
+        r.httpMethod = "POST"
+        r.setValue("application/json", forHTTPHeaderField: "Content-Type")
+        r.httpBody = try JSONSerialization.data(withJSONObject: [
+            "text": text, "text_lang": p.textLang,
+            "ref_audio_path": voiceDir.appendingPathComponent("ref.wav").path,
+            "prompt_text": p.refText, "prompt_lang": p.refLang,
+            "text_split_method": "cut5", "batch_size": 1, "media_type": "wav", "streaming_mode": false,
+            "top_k": 15, "top_p": 1, "temperature": 1, "repetition_penalty": 1.35, "parallel_infer": false,
+        ] as [String: Any])
+        let (data, resp) = try await URLSession.shared.data(for: r)
+        guard (resp as? HTTPURLResponse)?.statusCode == 200, data.count > 1000 else {
+            throw LLMError(message: "GPT-SoVITS 合成失败：\(String(decoding: data.prefix(300), as: UTF8.self))")
         }
         return data
     }

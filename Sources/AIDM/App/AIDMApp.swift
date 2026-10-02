@@ -10,11 +10,27 @@ struct AIDMApp: App {
         Window("AI 剧本杀", id: "main") {
             MainView()
                 .environment(model)
+                .environmentObject(model.narrator)
                 .preferredColorScheme(.dark)
-                .frame(minWidth: 1080, minHeight: 680)
+                .frame(minWidth: 960, minHeight: 620)
         }
         .defaultSize(width: 1360, height: 860)
         .commands { AppCommands(model: model) }
+
+        Window("主持台", id: "console") {
+            Group {
+                if let s = model.session {
+                    ConsoleView(session: s)
+                } else {
+                    Text("没有进行中的游戏").foregroundStyle(.secondary).frame(maxWidth: .infinity, maxHeight: .infinity)
+                }
+            }
+            .environment(model)
+            .environmentObject(model.narrator)
+            .preferredColorScheme(.dark)
+            .frame(minWidth: 1080, minHeight: 680)
+        }
+        .defaultSize(width: 1360, height: 860)
 
         Window("大屏", id: "stage") {
             StageView()
@@ -86,6 +102,7 @@ struct AppCommands: Commands {
                 .keyboardShortcut("r").disabled(model.session == nil)
             Divider()
             Button("打开大屏") { openWindow(id: "stage") }.keyboardShortcut("b").disabled(model.session == nil)
+            Button("打开主持台") { openWindow(id: "console") }.keyboardShortcut("k").disabled(model.session == nil)
             Divider()
             Button("结束游戏") { model.endGame() }.disabled(model.session == nil)
         }
@@ -111,7 +128,7 @@ struct MainView: View {
         @Bindable var model = model
         Group {
             if let s = model.session {
-                ConsoleView(session: s)
+                DMView(session: s)
             } else {
                 LibraryView()
             }
