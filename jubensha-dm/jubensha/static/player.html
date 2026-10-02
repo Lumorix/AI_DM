@@ -1,0 +1,307 @@
+<!doctype html>
+<html lang="zh-CN">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<meta name="theme-color" content="#141116">
+<title>玩家 · AI剧本杀</title>
+<link rel="stylesheet" href="/static/style.css">
+<style>
+  body { padding-bottom: calc(70px + env(safe-area-inset-bottom)); }
+  .top { position: sticky; top: 0; z-index: 10; background: #141116f2; backdrop-filter: blur(6px); border-bottom: 1px solid var(--line); padding: 10px 16px; display: flex; align-items: center; gap: 10px; }
+  .top .who { font-family: var(--serif); font-size: 18px; }
+  .top .ph { font-size: 13px; color: var(--muted); }
+  .top .timer { margin-left: auto; font-size: 20px; }
+  .page { padding: 16px; display: flex; flex-direction: column; gap: 14px; max-width: 720px; margin: 0 auto; }
+  nav { position: fixed; bottom: 0; left: 0; right: 0; z-index: 10; display: flex; background: #1d1920f5; border-top: 1px solid var(--line); padding-bottom: env(safe-area-inset-bottom); }
+  nav button { flex: 1; background: none; border: 0; padding: 10px 0 8px; font-size: 13px; color: var(--muted); position: relative; }
+  nav button .i { display: block; font-size: 19px; margin-bottom: 2px; }
+  nav button.on { color: var(--paper); }
+  nav button.on::before { content: ""; position: absolute; top: 0; left: 30%; right: 30%; height: 2px; background: var(--red); }
+  nav button.dot::after { content: ""; position: absolute; top: 8px; right: calc(50% - 16px); width: 8px; height: 8px; border-radius: 50%; background: var(--red); }
+  nav button.hot { color: var(--brass); }
+  .section-title { font-size: 13px; letter-spacing: .2em; color: var(--muted); margin: 6px 0 -4px; }
+  .act-title { font-family: var(--serif); color: var(--red); font-size: 14px; letter-spacing: .2em; margin-bottom: 6px; }
+  .book { font-size: 16px; line-height: 1.9; }
+  .loc { display: flex; align-items: center; justify-content: space-between; padding: 16px; font-size: 17px; font-family: var(--serif); text-align: left; }
+  .chat { display: flex; flex-direction: column; gap: 10px; }
+  .bubble { max-width: 88%; padding: 10px 13px; border-radius: 14px; line-height: 1.65; white-space: pre-wrap; }
+  .bubble.me { align-self: flex-end; background: #3a2a1f; color: #f1dcc0; border-bottom-right-radius: 4px; }
+  .bubble.dm { align-self: flex-start; background: var(--ink-3); font-family: var(--serif); border-bottom-left-radius: 4px; }
+  .bubble.clue { align-self: center; background: var(--paper); color: var(--paper-ink); font-size: 14px; border-left: 3px solid var(--red); border-radius: 4px; }
+  .composer { position: sticky; bottom: calc(66px + env(safe-area-inset-bottom)); background: var(--ink); padding-top: 8px; display: flex; flex-direction: column; gap: 8px; }
+  .composer label { font-size: 13px; color: var(--muted); display: flex; align-items: center; gap: 6px; }
+  .char-card { text-align: left; padding: 14px 16px; border-radius: 12px; border: 1px solid var(--line); background: var(--ink-2); }
+  .char-card .n { font-family: var(--serif); font-size: 19px; }
+  .char-card.taken { opacity: .45; }
+  .hero { text-align: center; padding: 28px 10px 6px; }
+  .hero h1 { font-size: 30px; }
+  .hero p { color: var(--muted); line-height: 1.7; }
+  .vote-opt { padding: 16px; font-size: 18px; font-family: var(--serif); text-align: left; }
+  .vote-opt.sel { border-color: var(--red); background: var(--red-soft); }
+  .stream-box { border-left: 3px solid var(--brass); padding-left: 12px; font-family: var(--serif); font-size: 17px; line-height: 1.8; white-space: pre-wrap; }
+</style>
+</head>
+<body>
+
+<!-- 选角色 -->
+<div id="lobby" class="hidden">
+  <div class="hero"><h1 id="lTitle">AI 剧本杀</h1><p id="lIntro"></p></div>
+  <div class="page">
+    <div class="section-title">选择你的角色</div>
+    <div id="chars" style="display:grid;gap:10px"></div>
+  </div>
+</div>
+
+<!-- 游戏中 -->
+<div id="game" class="hidden">
+  <div class="top">
+    <div><div class="who" id="who"></div><div class="ph" id="ph"></div></div>
+    <div class="timer" id="timer"></div>
+  </div>
+  <div class="page" id="tab-feed"></div>
+  <div class="page hidden" id="tab-book"></div>
+  <div class="page hidden" id="tab-clues"></div>
+  <div class="page hidden" id="tab-search"></div>
+  <div class="page hidden" id="tab-ask">
+    <div class="muted" style="font-size:13px;line-height:1.6">私下问DM关于你剧本的问题，或者询问可能获得线索。勾选“公开提问”则问题和回答会显示在大屏上。</div>
+    <div class="chat" id="chat"></div>
+    <div class="composer">
+      <textarea id="askText" rows="2" placeholder="想问DM什么？"></textarea>
+      <div class="row">
+        <label><input type="checkbox" id="askPublic"> 公开提问（显示在大屏）</label>
+        <button class="btn primary grow" id="askBtn" style="max-width:120px;margin-left:auto">发送</button>
+      </div>
+    </div>
+  </div>
+  <div class="page hidden" id="tab-vote"></div>
+  <nav id="nav">
+    <button data-tab="feed"><span class="i">📜</span>动态</button>
+    <button data-tab="book"><span class="i">📖</span>剧本</button>
+    <button data-tab="clues"><span class="i">🔍</span>线索</button>
+    <button data-tab="search"><span class="i">🧭</span>搜证</button>
+    <button data-tab="ask"><span class="i">💬</span>问DM</button>
+    <button data-tab="vote" class="hidden"><span class="i">🗳️</span>投票</button>
+  </nav>
+</div>
+
+<div id="modal" class="modal-bg hidden"><div class="modal paper" id="modalBody"></div></div>
+
+<script src="/static/common.js"></script>
+<script>
+const KEY = "jbs_token";
+let token = localStorage.getItem(KEY), V = null, tab = "feed", conn = null, streaming = null, streamText = "";
+let seen = JSON.parse(localStorage.getItem("jbs_seen") || "{}");
+const markSeen = (k, n) => { seen[k] = n; localStorage.setItem("jbs_seen", JSON.stringify(seen)); };
+
+function modal(html) { $("#modalBody").innerHTML = html; $("#modal").classList.remove("hidden"); }
+function closeModal() { $("#modal").classList.add("hidden"); }
+$("#modal").onclick = (e) => { if (e.target.id === "modal") closeModal(); };
+
+// ---------------- 选角色 ----------------
+async function showLobby() {
+  $("#game").classList.add("hidden"); $("#lobby").classList.remove("hidden");
+  const r = await fetch("/api/lobby").then((r) => r.json()).catch(() => null);
+  if (!r) { $("#chars").innerHTML = '<div class="muted">连不上服务器</div>'; return setTimeout(showLobby, 3000); }
+  $("#lTitle").textContent = "《" + r.title + "》"; $("#lIntro").textContent = r.intro;
+  $("#chars").innerHTML = r.players.map((p) => {
+    const taken = p.player && !p.claimable;
+    return `<button class="char-card ${taken ? "taken" : ""}" data-id="${esc(p.char_id)}" ${taken ? "disabled" : ""}>
+      <div class="row"><span class="n">${esc(p.char_name)}</span>
+      <span class="chip ${taken ? "" : "on"}" style="margin-left:auto">${taken ? esc(p.player) + " 已选" : p.claimable ? "可重新接管" : "可选"}</span></div>
+      <div class="muted" style="margin-top:6px;line-height:1.6">${esc(p.public)}</div></button>`;
+  }).join("");
+  $$("#chars .char-card:not(.taken)").forEach((b) => b.onclick = () => {
+    const name = b.querySelector(".n").textContent;
+    modal(`<h3>扮演 ${esc(name)}</h3><p style="margin:6px 0 12px">输入你的名字（方便大家认人）</p>
+      <input type="text" id="nm" maxlength="12" value="${esc(localStorage.getItem("jbs_name") || "")}" style="background:#fff;color:#222">
+      <div class="row" style="margin-top:14px"><button class="btn ghost grow" style="color:#555" onclick="closeModal()">取消</button>
+      <button class="btn primary grow" id="go">确定</button></div>`);
+    $("#nm").focus();
+    $("#go").onclick = async () => {
+      const nm = $("#nm").value.trim();
+      localStorage.setItem("jbs_name", nm);
+      const j = await api("/api/join", { char_id: b.dataset.id, name: nm });
+      if (!j.ok) { toast(j.msg); return showLobby(); }
+      token = j.token; localStorage.setItem(KEY, token); seen = {}; markSeen("_", 0);
+      closeModal(); startGame();
+    };
+  });
+  // 有人选了角色就刷新
+  clearTimeout(showLobby.t); showLobby.t = setTimeout(() => !$("#lobby").classList.contains("hidden") && showLobby(), 4000);
+}
+
+// ---------------- 游戏 ----------------
+function startGame() {
+  $("#lobby").classList.add("hidden"); $("#game").classList.remove("hidden");
+  conn && conn.close();
+  conn = connect({ role: "player", token }, {
+    view: render,
+    event: onEvent,
+    kicked() { toast("你的角色已在别的手机上登录或被释放"); localStorage.removeItem(KEY); token = null; showLobby(); },
+    async check() {
+      const j = await api("/api/me", { token });
+      if (j.ok === false && j.code === 401) { localStorage.removeItem(KEY); token = null; showLobby(); return false; }
+      return true;
+    },
+  });
+}
+
+function onEvent(ev) {
+  if (ev.type === "stream_start") { streaming = ev.id; streamText = ""; renderFeed(); }
+  else if (ev.type === "stream_delta" && ev.id === streaming) { streamText += ev.text; const b = $("#streamBox"); if (b) b.textContent = streamText; }
+  else if (ev.type === "stream_end" && ev.id === streaming) { streaming = null; }
+}
+
+function setTab(t) {
+  tab = t;
+  $$("#nav button").forEach((b) => b.classList.toggle("on", b.dataset.tab === t));
+  $$("#game > .page").forEach((p) => p.classList.toggle("hidden", p.id !== "tab-" + t));
+  if (!V || !V.me) return;
+  if (t === "book") markSeen("book", V.me.book.length);
+  if (t === "clues") markSeen("clues", V.me.clues.length + V.public_clues.length);
+  if (t === "ask") { markSeen("ask", V.me.private_log.length); const c = $("#chat"); setTimeout(() => window.scrollTo(0, document.body.scrollHeight), 30); }
+  if (t === "feed") markSeen("feed", V.log.length);
+  badges();
+}
+$$("#nav button").forEach((b) => b.onclick = () => setTab(b.dataset.tab));
+startTimer($("#timer"), () => V && V.phase);
+
+function badges() {
+  if (!V || !V.me) return;
+  const m = V.me, dot = (t, on) => $(`#nav [data-tab=${t}]`).classList.toggle("dot", on && tab !== t);
+  dot("book", m.book.length > (seen.book || 0));
+  dot("clues", m.clues.length + V.public_clues.length > (seen.clues || 0));
+  dot("ask", m.private_log.length > (seen.ask || 0));
+  dot("feed", V.log.length > (seen.feed || 0));
+  $(`#nav [data-tab=search]`).classList.toggle("hot", V.phase.type === "search" && m.search_left > 0);
+  const vt = $(`#nav [data-tab=vote]`);
+  vt.classList.toggle("hidden", !V.vote);
+  vt.classList.toggle("dot", !!V.vote && V.phase.type === "vote" && !m.vote && tab !== "vote");
+}
+
+function render(v) {
+  const prevPhase = V && V.phase.index;
+  V = v;
+  if (!v.me) return;
+  const m = v.me;
+  $("#who").textContent = m.char_name + (m.name ? " · " + m.name : "");
+  $("#ph").textContent = `${v.phase.index + 1}/${v.phase.total} ${v.phase.title}`;
+  if (prevPhase !== undefined && prevPhase !== null && prevPhase !== v.phase.index) {
+    toast("进入阶段：" + v.phase.title);
+    if (v.phase.type === "search") setTab("search");
+    else if (v.phase.type === "vote") setTab("vote");
+    else if (v.phase.type === "reading") setTab("book");
+    else if (["search", "vote", "reading"].includes(tab)) setTab("feed");
+  }
+  renderFeed(); renderBook(); renderClues(); renderSearch(); renderAsk(); renderVote();
+  if (tab === "feed") markSeen("feed", v.log.length);
+  if (tab === "ask") markSeen("ask", m.private_log.length);
+  if (tab === "book") markSeen("book", m.book.length);
+  if (tab === "clues") markSeen("clues", m.clues.length + v.public_clues.length);
+  badges();
+}
+
+function renderFeed() {
+  if (!V) return;
+  const items = V.log.slice(-60).reverse();
+  $("#tab-feed").innerHTML =
+    (streaming ? `<div class="section-title">DM 正在说</div><div class="stream-box streaming" id="streamBox">${esc(streamText)}</div>` : "") +
+    (V.ai_paused ? '<div class="chip on">AI 主持已暂停</div>' : "") +
+    `<div class="log">${logHTML(items, V.me && V.me.char_name)}</div>`;
+}
+
+function renderBook() {
+  const m = V.me;
+  $("#tab-book").innerHTML = `
+    <div class="paper"><h3>${esc(m.char_name)}</h3><div class="pre">${esc(m.public)}</div></div>
+    ${m.book.length ? m.book.slice().reverse().map((b, i) => `
+      <div class="paper"><div class="act-title">${i === 0 && m.book.length > 1 ? "最新 · " : ""}${esc(b.act)}</div>
+      <div class="book pre">${esc(b.text)}</div></div>`).join("") : '<div class="muted">剧本还没有解锁，等DM通知。</div>'}
+    <div class="section-title">其他角色</div>
+    ${V.players.filter((p) => p.char_id !== m.char_id).map((p) => `
+      <div class="char-card"><div class="n" style="font-size:16px">${esc(p.char_name)} <span class="muted" style="font-size:13px">${esc(p.player || "")}</span></div>
+      <div class="muted" style="margin-top:4px;font-size:14px;line-height:1.6">${esc(p.public)}</div></div>`).join("")}`;
+}
+
+function clueCard(c, mine) {
+  return `<div class="paper clue-card">${c.public ? '<span class="tag">已公开</span>' : ""}
+    <h3>${esc(c.title)}</h3><div class="pre">${esc(c.text)}</div>
+    ${c.has_image ? `<img src="/api/clue-image/${encodeURIComponent(c.id)}?token=${encodeURIComponent(token)}">` : ""}
+    ${mine && !c.public ? `<div style="margin-top:10px"><button class="btn small" onclick="publish('${esc(c.id)}')">公开这条线索</button></div>` : ""}</div>`;
+}
+function renderClues() {
+  const m = V.me;
+  const mineIds = new Set(m.clues.map((c) => c.id));
+  const others = V.public_clues.filter((c) => !mineIds.has(c.id));
+  $("#tab-clues").innerHTML = `
+    <div class="section-title">我的线索（${m.clues.length}）</div>
+    ${m.clues.length ? m.clues.slice().reverse().map((c) => clueCard(c, true)).join("") : '<div class="muted">还没有线索。</div>'}
+    <div class="section-title">其他人公开的线索（${others.length}）</div>
+    ${others.length ? others.slice().reverse().map((c) => clueCard(c, false)).join("") : '<div class="muted">暂无。</div>'}`;
+}
+async function publish(id) {
+  if (!confirm("公开后所有人都能看到，确定吗？")) return;
+  const j = await api("/api/publish", { token, clue: id });
+  toast(j.ok ? "已公开" : j.msg);
+}
+
+function renderSearch() {
+  const m = V.me;
+  if (V.phase.type !== "search") { $("#tab-search").innerHTML = '<div class="muted">现在不是搜证阶段。</div>'; return; }
+  $("#tab-search").innerHTML = `
+    <div class="row"><h3 style="font-size:18px">搜证</h3><span class="chip ${m.search_left ? "on" : ""}" style="margin-left:auto">剩余 ${m.search_left} 次</span></div>
+    ${m.locations.map((l) => `<button class="btn loc" ${m.search_left && l.left ? "" : "disabled"} onclick="doSearch('${esc(l.id)}', this)">
+      <span>${esc(l.name)}</span><span class="muted" style="font-size:13px;font-family:var(--sans)">${l.left ? "还可能有发现" : "已搜空"}</span></button>`).join("")}`;
+}
+async function doSearch(id, btn) {
+  btn.disabled = true;
+  const j = await api("/api/search", { token, location: id });
+  if (!j.ok) return toast(j.msg);
+  modal(`<div class="act-title">你发现了</div><h3>${esc(j.title)}</h3><div class="pre" style="margin:8px 0 14px">${esc(j.text)}</div>
+    <button class="btn primary" style="width:100%" onclick="closeModal()">收好</button>`);
+}
+
+function renderAsk() {
+  const m = V.me;
+  const html = m.private_log.map((e) => {
+    if (e.kind === "ask") return `<div class="bubble me">${esc(e.text)}</div>`;
+    if (e.kind === "clue") return `<div class="bubble clue">🔍 ${esc(e.text)}</div>`;
+    return `<div class="bubble dm">${esc(e.text)}</div>`;
+  }).join("") + (m.busy ? '<div class="bubble dm"><span class="spinner"></span> DM 正在想…</div>' : "");
+  const chat = $("#chat");
+  if (chat.dataset.h !== html) { chat.innerHTML = html || '<div class="muted" style="text-align:center">还没有提问</div>'; chat.dataset.h = html; if (tab === "ask") window.scrollTo(0, document.body.scrollHeight); }
+  $("#askBtn").disabled = m.busy;
+}
+$("#askBtn").onclick = async () => {
+  const text = $("#askText").value.trim();
+  if (!text) return;
+  const pub = $("#askPublic").checked;
+  $("#askBtn").disabled = true; $("#askText").value = "";
+  const j = await api("/api/ask", { token, text, public: pub });
+  if (!j.ok) { toast(j.msg); $("#askText").value = text; }
+  else if (pub) toast("回答已显示在大屏和动态里");
+  if (j.clue) modal(`<div class="act-title">DM 给了你一条线索</div><h3>${esc(j.clue.title)}</h3><div class="pre" style="margin:8px 0 14px">${esc(j.clue.text)}</div><button class="btn primary" style="width:100%" onclick="closeModal()">收好</button>`);
+  $("#askBtn").disabled = false;
+};
+
+function renderVote() {
+  const m = V.me, v = V.vote;
+  if (!v) { $("#tab-vote").innerHTML = ""; return; }
+  const canVote = V.phase.type === "vote" && !m.vote;
+  $("#tab-vote").innerHTML = `<h3 style="font-size:20px">${esc(v.question)}</h3>
+    <div class="muted">${v.revealed ? "" : `已投 ${v.voted} / ${v.total}`}${m.vote ? " · 你已投票" : ""}</div>
+    ${V.players.map((p) => `<button class="btn vote-opt ${m.vote === p.char_id ? "sel" : ""}" ${canVote ? "" : "disabled"} onclick="doVote('${esc(p.char_id)}','${esc(p.char_name)}')">${esc(p.char_name)}</button>`).join("")}
+    ${v.revealed ? `<div class="paper"><h3>投票结果</h3><div class="pre">${esc(v.result)}</div></div>` : ""}`;
+}
+async function doVote(id, name) {
+  if (!confirm(`确定投给 ${name}？投票后不能更改。`)) return;
+  const j = await api("/api/vote", { token, option: id });
+  toast(j.ok ? "已投票" : j.msg);
+}
+
+if (token) startGame(); else showLobby();
+setTab("feed");
+</script>
+</body>
+</html>

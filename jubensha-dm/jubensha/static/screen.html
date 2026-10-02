@@ -1,0 +1,157 @@
+<!doctype html>
+<html lang="zh-CN">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>大屏 · AI剧本杀</title>
+<link rel="stylesheet" href="/static/style.css">
+<style>
+  body { overflow: hidden; height: 100vh; }
+  .wrap { display: grid; grid-template-columns: minmax(0, 2.1fr) minmax(300px, 1fr); height: 100vh; }
+  .main { display: flex; flex-direction: column; min-height: 0; padding: 28px 36px 20px; }
+  .side { border-left: 1px solid var(--line); background: var(--ink-2); padding: 22px; overflow-y: auto; display: flex; flex-direction: column; gap: 22px; }
+  .head { display: flex; align-items: flex-end; gap: 20px; border-bottom: 1px solid var(--line); padding-bottom: 16px; }
+  .title { font-size: 15px; color: var(--brass); letter-spacing: .3em; }
+  .phase { font-size: clamp(30px, 4vw, 52px); margin-top: 6px; }
+  .head .timer { margin-left: auto; font-size: clamp(34px, 4.5vw, 60px); color: var(--paper); }
+  .stage { flex: 0 0 auto; margin: 26px 0 18px; min-height: 120px; max-height: 46vh; overflow-y: auto; }
+  .stage .body { font-family: var(--serif); font-size: clamp(22px, 2.3vw, 32px); line-height: 1.75; color: #f6eedf; white-space: pre-wrap; }
+  .stage .who { color: var(--red); font-size: 14px; letter-spacing: .3em; margin-bottom: 8px; }
+  .feed { flex: 1; min-height: 0; overflow-y: auto; border-top: 1px dashed var(--line); padding-top: 14px; mask-image: linear-gradient(to bottom, transparent, #000 40px); }
+  .feed .log { font-size: 17px; }
+  .side h2 { font-size: 15px; letter-spacing: .25em; color: var(--muted); margin-bottom: 10px; }
+  .players { display: grid; gap: 8px; }
+  .pl { display: flex; align-items: center; gap: 10px; padding: 8px 10px; background: var(--ink-3); border-radius: 8px; }
+  .pl .n { font-family: var(--serif); font-size: 17px; }
+  .pl .chip { margin-left: auto; }
+  .qr { background: #fff; border-radius: 8px; padding: 10px; width: 180px; height: 180px; display: flex; align-items: center; justify-content: center; }
+  .qr img { width: 100%; height: 100%; }
+  .clues { display: grid; gap: 10px; }
+  .clues .paper { padding: 10px 12px; font-size: 14px; }
+  .clues .paper h3 { font-size: 15px; margin-bottom: 4px; }
+  .vote { font-size: 18px; }
+  .controls { display: flex; gap: 8px; flex-wrap: wrap; }
+  .paused { background: var(--red-soft); color: #f0b8bb; padding: 6px 10px; border-radius: 8px; font-size: 14px; }
+  @media (max-width: 800px) { .wrap { grid-template-columns: 1fr; } body { overflow: auto; height: auto; } .side { border-left: 0; } }
+</style>
+</head>
+<body>
+<div class="wrap">
+  <div class="main">
+    <div class="head">
+      <div>
+        <div class="title" id="title">AI 剧本杀</div>
+        <h1 class="phase" id="phase">连接中…</h1>
+      </div>
+      <div class="timer" id="timer"></div>
+    </div>
+    <div class="stage" id="stage"><div class="who">DM</div><div class="body" id="stageBody"></div></div>
+    <div class="feed" id="feed"><div class="log" id="log"></div></div>
+  </div>
+  <div class="side">
+    <div id="paused" class="paused hidden">AI 主持已暂停</div>
+    <div id="joinBox">
+      <h2>扫码入场</h2>
+      <div class="row" style="align-items:flex-start;gap:14px">
+        <div class="qr" id="qr"><span class="muted" style="color:#666;font-size:12px">二维码加载中</span></div>
+      </div>
+      <div class="muted" style="margin-top:8px;font-size:13px;word-break:break-all" id="url"></div>
+    </div>
+    <div>
+      <h2>角色</h2>
+      <div class="players" id="players"></div>
+    </div>
+    <div id="voteBox" class="hidden">
+      <h2>投票</h2>
+      <div class="vote pre" id="vote"></div>
+    </div>
+    <div id="clueBox" class="hidden">
+      <h2>公开线索</h2>
+      <div class="clues" id="clues"></div>
+    </div>
+    <div class="controls">
+      <button class="btn small" id="ttsBtn">🔇 语音朗读：关</button>
+      <button class="btn small" id="qrBtn">隐藏二维码</button>
+      <button class="btn small" id="fsBtn">全屏</button>
+    </div>
+  </div>
+</div>
+<script src="/static/common.js"></script>
+<script>
+let V = null, streaming = null, qrHidden = false;
+startTimer($("#timer"), () => V && V.phase);
+
+function render(v, ev) {
+  V = v;
+  $("#title").textContent = "《" + v.title + "》";
+  $("#phase").textContent = v.phase.title;
+  document.title = v.phase.title + " · " + v.title;
+  $("#paused").classList.toggle("hidden", !v.ai_paused);
+  if (ev && ev.lan_url && !$("#qr").dataset.url) {
+    $("#qr").dataset.url = ev.lan_url;
+    $("#url").textContent = ev.lan_url;
+    const img = new Image();
+    img.onload = () => { $("#qr").innerHTML = ""; $("#qr").appendChild(img); };
+    img.onerror = () => { // 服务器没装 segno 就用在线生成
+      const alt = new Image();
+      alt.onload = () => { $("#qr").innerHTML = ""; $("#qr").appendChild(alt); };
+      alt.onerror = () => { $("#qr").innerHTML = '<span style="color:#666;font-size:12px">请手动输入下方网址</span>'; };
+      alt.src = "https://api.qrserver.com/v1/create-qr-code/?size=300x300&data=" + encodeURIComponent(ev.lan_url);
+    };
+    img.src = "/api/qr.svg";
+  }
+  $("#players").innerHTML = v.players.map((p) => `
+    <div class="pl"><span class="n">${esc(p.char_name)}</span>
+      <span class="muted">${p.player && !p.claimable ? esc(p.player) : ""}</span>
+      ${p.busy ? '<span class="spinner" title="正在问DM"></span>' : ""}
+      <span class="chip ${p.player && !p.claimable ? "ok" : ""}">${p.player && !p.claimable ? (v.vote ? (p.voted ? "已投票" : "未投票") : "已入座") : "空位"}</span>
+    </div>`).join("");
+  $("#clueBox").classList.toggle("hidden", !v.public_clues.length);
+  $("#clues").innerHTML = v.public_clues.slice().reverse().map((c) => `
+    <div class="paper clue-card"><h3>${esc(c.title)}</h3><div class="pre">${esc(c.text)}</div>
+    ${c.has_image ? `<img src="/api/clue-image/${encodeURIComponent(c.id)}">` : ""}</div>`).join("");
+  $("#voteBox").classList.toggle("hidden", !v.vote);
+  if (v.vote) $("#vote").textContent = v.vote.revealed ? v.vote.question + "\n\n" + v.vote.result : `${v.vote.question}\n已投 ${v.vote.voted} / ${v.vote.total}`;
+  const allJoined = v.players.every((p) => p.player && !p.claimable);
+  $("#joinBox").classList.toggle("hidden", qrHidden || (allJoined && v.phase.index > 0));
+
+  if (!streaming) {
+    const last = [...v.log].reverse().find((e) => ["narration", "reveal", "answer"].includes(e.kind));
+    $("#stageBody").textContent = last ? last.text : (v.intro || "");
+    $("#stageBody").classList.remove("streaming");
+  }
+  const feed = $("#feed"), atBottom = feed.scrollHeight - feed.scrollTop - feed.clientHeight < 80;
+  $("#log").innerHTML = logHTML(v.log.filter((e) => !["narration", "reveal"].includes(e.kind)).slice(-40));
+  if (atBottom) feed.scrollTop = feed.scrollHeight;
+}
+
+connect({ role: "screen" }, {
+  view: render,
+  event(ev) {
+    if (ev.type === "stream_start") {
+      streaming = ev.id; TTS.stop();
+      $("#stageBody").textContent = ""; $("#stageBody").classList.add("streaming");
+    } else if (ev.type === "stream_delta" && ev.id === streaming) {
+      $("#stageBody").textContent += ev.text; TTS.feed(ev.text);
+      const st = $("#stage"); st.scrollTop = st.scrollHeight;
+    } else if (ev.type === "stream_end" && ev.id === streaming) {
+      streaming = null; $("#stageBody").classList.remove("streaming");
+      if (ev.cancelled) TTS.stop(); else TTS.flush();
+    } else if (ev.type === "speak") {
+      $("#stageBody").textContent = ev.text; TTS.say(ev.text);
+    }
+  },
+});
+
+const ttsOk = TTS.init();
+$("#ttsBtn").onclick = () => {
+  if (!ttsOk) return toast("这个浏览器不支持语音朗读，换 Chrome 或 Edge 试试");
+  TTS.on = !TTS.on;
+  if (!TTS.on) TTS.stop(); else TTS.say("语音已开启");
+  $("#ttsBtn").textContent = TTS.on ? "🔊 语音朗读：开" : "🔇 语音朗读：关";
+};
+$("#qrBtn").onclick = () => { qrHidden = !qrHidden; $("#qrBtn").textContent = qrHidden ? "显示二维码" : "隐藏二维码"; V && render(V); };
+$("#fsBtn").onclick = () => document.fullscreenElement ? document.exitFullscreen() : document.documentElement.requestFullscreen();
+</script>
+</body>
+</html>

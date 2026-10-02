@@ -1,0 +1,9 @@
+starlette>=0.37
+uvicorn>=0.29
+requests>=2.31
+pyyaml>=6.0
+pillow>=10.0
+pypdfium2>=4.0
+segno>=1.5
+# OCR（识别扫描版PDF）用；不需要识别可以不装
+rapidocr_onnxruntime>=1.3
