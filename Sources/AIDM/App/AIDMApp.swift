@@ -60,6 +60,10 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
     }
 
     func applicationShouldTerminateAfterLastWindowClosed(_ sender: NSApplication) -> Bool { true }
+
+    func applicationWillTerminate(_ notification: Notification) {
+        MainActor.assumeIsolated { LocalTTS.shared.stop() }     // 关掉后台的本机语音服务
+    }
 }
 
 struct AppCommands: Commands {

@@ -187,14 +187,18 @@ private struct VoiceForm: View {
                 Toggle("大屏语音朗读 DM 的话", isOn: $narrator.enabled)
                 Picker("声音", selection: $model.settings.voice.engine) {
                     Text("系统自带语音（离线）").tag(VoiceSettings.Engine.system)
-                    Text("阿里云 Qwen 克隆音色（八千代等）").tag(VoiceSettings.Engine.qwen)
+                    Text("本机 Qwen3-TTS 克隆音色（免费、离线）").tag(VoiceSettings.Engine.local)
+                    Text("阿里云 Qwen 克隆音色（联网、按字收费）").tag(VoiceSettings.Engine.qwen)
                 }
                 Button("试听") { narrator.preview("各位好，我是今晚的主持人。台风封岛，凶手就在你们之中。") }
                 if let e = narrator.lastError, model.settings.voice.engine == .qwen {
                     Text(e).font(.caption).foregroundStyle(.orange)
                 }
             }
-            if model.settings.voice.engine == .system {
+            if model.settings.voice.engine == .local {
+                LocalVoiceSection()
+                PregenSection()
+            } else if model.settings.voice.engine == .system {
                 Section {
                     Picker("系统声音", selection: $narrator.voiceID) {
                         Text("自动（普通话）").tag("")
@@ -519,6 +523,89 @@ private struct PregenSection: View {
             }
             running = false
             refresh += 1
+        }
+    }
+}
+
+/// 本机 Qwen3-TTS：选音色、试听
+private struct LocalVoiceSection: View {
+    @Environment(AppModel.self) private var model
+    @State private var voices: [String] = []
+    @State private var busy: String?
+    @State private var error: String?
+    @State private var player = ClipPlayer()
+
+    static let sample = "各位侦探，欢迎来到六角馆。我是今晚的主持人，八千代。"
+
+    var body: some View {
+        @Bindable var model = model
+        Section {
+            LabeledContent("状态") {
+                Text(LocalTTS.isInstalled ? "已安装 \(LocalTTS.modelName)" : "还没安装（需要 Python 环境和模型）")
+                    .foregroundStyle(LocalTTS.isInstalled ? Color.green : .orange)
+            }
+            if voices.isEmpty {
+                Text("还没有本机音色。").foregroundStyle(.secondary)
+            }
+            ForEach(voices, id: \.self) { v in
+                HStack {
+                    Button {
+                        model.settings.voice.localVoice = v
+                    } label: {
+                        HStack {
+                            Image(systemName: model.settings.voice.localVoice == v ? "largecircle.fill.circle" : "circle")
+                                .foregroundStyle(model.settings.voice.localVoice == v ? Color.accentColor : .secondary)
+                            VStack(alignment: .leading, spacing: 2) {
+                                Text(v)
+                                Text(refText(v)).font(.caption).foregroundStyle(.secondary).lineLimit(1)
+                            }
+                            Spacer()
+                        }
+                        .contentShape(Rectangle())
+                    }
+                    .buttonStyle(.plain)
+                    .accessibilityLabel("使用本机音色 \(v)")
+                    if busy == v { ProgressView().controlSize(.small) }
+                    Button("原声") { play(LocalTTS.voicesDir.appendingPathComponent(v).appendingPathComponent("ref.wav")) }
+                    Button("试听中文") { Task { await preview(v) } }.disabled(busy != nil || !LocalTTS.isInstalled)
+                }
+            }
+            if let error { Text(error).font(.caption).foregroundStyle(.red).textSelection(.enabled) }
+            HStack {
+                Button("刷新") { voices = LocalTTS.voices() }
+                Button("打开本机语音文件夹") { NSWorkspace.shared.open(LocalTTS.root) }
+            }
+        } header: { Text("本机音色") } footer: {
+            Text("用 Qwen3-TTS 在这台 Mac 上合成（Apple 芯片），不联网、不花钱。音色是从一段 10 秒左右的原声克隆的：“原声”可以听参考录音，“试听中文”让她用这个音色说一句中文（第一次要加载模型，十几秒）。克隆音色请仅用于个人娱乐。")
+        }
+        .onAppear {
+            voices = LocalTTS.voices()
+            if model.settings.voice.localVoice.isEmpty, let v = voices.first(where: { $0.hasSuffix("综合") }) ?? voices.first {
+                model.settings.voice.localVoice = v
+            }
+        }
+    }
+
+    private func refText(_ v: String) -> String {
+        (try? String(contentsOf: LocalTTS.voicesDir.appendingPathComponent(v).appendingPathComponent("ref.txt"), encoding: .utf8)) ?? ""
+    }
+
+    private func play(_ url: URL) {
+        guard let d = try? Data(contentsOf: url) else { return }
+        Task { await player.play(d) }
+    }
+
+    private func preview(_ v: String) async {
+        busy = v; error = nil
+        defer { busy = nil }
+        var cfg = model.settings.voice
+        cfg.engine = .local
+        cfg.localVoice = v
+        do {
+            let d = try await VoiceCache.synthesize(Self.sample, cfg: cfg, key: "")
+            await player.play(d)
+        } catch {
+            self.error = error.localizedDescription
         }
     }
 }

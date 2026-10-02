@@ -15,7 +15,7 @@ echo "▸ 打包 $APP"
 rm -rf "$APP"
 mkdir -p "$APP/Contents/MacOS" "$APP/Contents/Resources"
 cp "$BIN" "$APP/Contents/MacOS/AIDM"
-cp -R Resources/web Resources/Demo Resources/live2d "$APP/Contents/Resources/"
+cp -R Resources/web Resources/Demo Resources/live2d Resources/localtts "$APP/Contents/Resources/"
 [ -f Resources/AppIcon.icns ] && cp Resources/AppIcon.icns "$APP/Contents/Resources/"
 
 cat > "$APP/Contents/Info.plist" <<PLIST

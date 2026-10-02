@@ -17,6 +17,31 @@ enum Entry {
             ls.prefix(6).forEach { print(" · \($0)") }
             exit(0)
         }
+        // --clip 视频或音频 开始时间 [秒数]：截一段声音做克隆样本
+        if args.first == "--clip", args.count > 2, let start = AudioClip.parseTime(args[2]) {
+            let dur = args.count > 3 ? Double(args[3]) ?? 15 : 15
+            CLI.runAsync {
+                do { print(try await AudioClip.extract(from: URL(fileURLWithPath: args[1]), start: start, duration: dur).path) }
+                catch { print("失败：\(error.localizedDescription)") }
+            }
+            exit(0)
+        }
+        // --local-tts <音色> <文字> <输出.wav>：测试本机语音服务（会启动后台服务）
+        if args.first == "--local-tts", args.count > 3 {
+            CLI.runAsync {
+                do {
+                    let t = Date()
+                    let d = try await LocalTTS.shared.synthesize(args[2], voice: args[1])
+                    try d.write(to: URL(fileURLWithPath: args[3]))
+                    print("ok \(d.count) bytes in \(Int(Date().timeIntervalSince(t)))s")
+                    let t2 = Date()
+                    _ = try await LocalTTS.shared.synthesize("第二句话，服务已经在运行了。", voice: args[1])
+                    print("second sentence in \(String(format: "%.1f", Date().timeIntervalSince(t2)))s")
+                } catch { print("失败：\(error.localizedDescription)") }
+                await MainActor.run { LocalTTS.shared.stop() }
+            }
+            exit(0)
+        }
         if args.first == "--check", args.count > 1 {
             exit(CLI.check(URL(fileURLWithPath: args[1]), rewrite: args.contains("--rewrite")))
         }
@@ -25,6 +50,14 @@ enum Entry {
 }
 
 enum CLI {
+    /// 跑一段异步代码并等它结束；主线程保持转动（AVFoundation 之类需要主线程）
+    static func runAsync(_ body: @escaping () async -> Void) {
+        final class Flag: @unchecked Sendable { var done = false }
+        let flag = Flag()
+        Task.detached { await body(); await MainActor.run { flag.done = true } }
+        while !flag.done { RunLoop.main.run(mode: .default, before: Date().addingTimeInterval(0.05)) }
+    }
+
     static func check(_ folder: URL, rewrite: Bool) -> Int32 {
         do {
             let s = try ScriptIO.load(folder)
