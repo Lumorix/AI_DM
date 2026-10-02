@@ -1,0 +1,153 @@
+<!doctype html>
+<html lang="zh-CN">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>管理 · AI剧本杀</title>
+<link rel="stylesheet" href="/static/style.css">
+<style>
+  .page { max-width: 1100px; margin: 0 auto; padding: 16px; display: grid; grid-template-columns: 1fr 1fr; gap: 16px; }
+  @media (max-width: 820px) { .page { grid-template-columns: 1fr; } }
+  .card { background: var(--ink-2); border: 1px solid var(--line); border-radius: 12px; padding: 14px; display: flex; flex-direction: column; gap: 10px; }
+  .card h2 { font-size: 15px; letter-spacing: .15em; color: var(--brass); }
+  .full { grid-column: 1 / -1; }
+  .phases { display: flex; flex-direction: column; gap: 4px; max-height: 360px; overflow-y: auto; }
+  .ph { display: flex; gap: 8px; align-items: center; padding: 7px 10px; border-radius: 8px; background: var(--ink-3); font-size: 14px; text-align: left; border: 1px solid transparent; }
+  .ph.cur { border-color: var(--red); background: var(--red-soft); }
+  .ph .t { flex: 1; }
+  .big { display: flex; gap: 8px; flex-wrap: wrap; }
+  .big .btn { flex: 1; min-width: 110px; padding: 12px; }
+  .warn { font-size: 13px; color: #f0b8bb; white-space: pre-wrap; }
+  table { width: 100%; border-collapse: collapse; font-size: 14px; }
+  td { padding: 6px 4px; border-bottom: 1px solid var(--line); }
+  .head { display: flex; align-items: center; gap: 12px; padding: 14px 16px; border-bottom: 1px solid var(--line); }
+  .head .timer { margin-left: auto; font-size: 22px; }
+  details summary { cursor: pointer; color: var(--muted); font-size: 14px; }
+  .log { max-height: 320px; overflow-y: auto; font-size: 14px; }
+</style>
+</head>
+<body>
+<div class="head">
+  <h1 style="font-size:20px" id="title">管理</h1>
+  <span class="chip" id="model"></span>
+  <div class="timer" id="timer"></div>
+</div>
+<div class="page" id="app">
+  <div class="card">
+    <h2>流程控制</h2>
+    <div id="cur" style="font-family:var(--serif);font-size:22px"></div>
+    <div class="big">
+      <button class="btn" onclick="act('prev')">◀ 上一阶段</button>
+      <button class="btn primary" onclick="act('next')">下一阶段 ▶</button>
+    </div>
+    <div class="big">
+      <button class="btn small" onclick="act('replay')">重播本阶段旁白</button>
+      <button class="btn small" id="pauseBtn"></button>
+      <button class="btn small" id="modeBtn" onclick="act('narration_mode')"></button>
+    </div>
+    <div class="phases" id="phases"></div>
+  </div>
+
+  <div class="card">
+    <h2>记录线下讨论要点</h2>
+    <div class="muted" style="font-size:13px;line-height:1.6">大家面对面说的话AI听不到。把关键内容（谁指控谁、谁承认了什么、新的时间线说法）简单记一句，AI主持和最后复盘都会用到。</div>
+    <textarea id="note" placeholder="例：A承认案发前去过现场；B开始怀疑C"></textarea>
+    <button class="btn" onclick="sendNote()">记下来</button>
+    <h2 style="margin-top:8px">让DM说一段话</h2>
+    <textarea id="say" placeholder="例：还有五分钟，请大家抓紧时间"></textarea>
+    <div class="row"><label class="muted" style="font-size:13px"><input type="checkbox" id="polish"> 让AI润色</label>
+      <button class="btn grow" onclick="sendSay()">在大屏播出</button></div>
+  </div>
+
+  <div class="card">
+    <h2>玩家</h2>
+    <table id="players"></table>
+    <div id="voteBox" class="hidden">
+      <div class="pre" id="vote"></div>
+      <button class="btn small" onclick="act('reveal_votes')">公布投票结果</button>
+    </div>
+  </div>
+
+  <div class="card">
+    <h2>手动发线索</h2>
+    <details id="clueDetails"><summary>展开（会看到线索标题，参与游戏的人慎点）</summary>
+      <div style="display:flex;flex-direction:column;gap:8px;margin-top:10px">
+        <select id="clueSel"></select>
+        <select id="targetSel"></select>
+        <button class="btn" onclick="give()">发放</button>
+        <table id="clueTable" style="margin-top:6px"></table>
+      </div>
+    </details>
+  </div>
+
+  <div class="card full">
+    <h2>提醒 / 拦截记录</h2>
+    <div class="warn" id="warnings"></div>
+    <div><button class="btn small" onclick="act('clear_warnings')">清空</button></div>
+  </div>
+
+  <div class="card full">
+    <h2>AI 的记忆</h2>
+    <div class="muted" style="font-size:13px" id="memStat"></div>
+    <details><summary>查看当前摘要（可能含剧情信息）</summary><div class="pre" style="margin-top:8px;font-size:14px" id="summary"></div></details>
+    <div><button class="btn small" onclick="act('summarize')">立即压缩记忆</button></div>
+    <details><summary>公开记录</summary><div class="log" id="log" style="margin-top:8px"></div></details>
+  </div>
+</div>
+<script src="/static/common.js"></script>
+<script>
+const ADMIN = new URLSearchParams(location.search).get("admin") || localStorage.getItem("jbs_admin") || "";
+if (ADMIN) localStorage.setItem("jbs_admin", ADMIN);
+let V = null;
+startTimer($("#timer"), () => V && V.phase);
+
+async function act(action, data = {}) {
+  const j = await api("/api/admin/" + action, data, { "X-Admin": ADMIN });
+  if (!j.ok) toast(j.msg || "失败");
+  return j;
+}
+async function sendNote() { const t = $("#note").value.trim(); if (!t) return; if ((await act("note", { text: t })).ok) { $("#note").value = ""; toast("已记录"); } }
+async function sendSay() { const t = $("#say").value.trim(); if (!t) return; if ((await act("say", { text: t, polish: $("#polish").checked })).ok) $("#say").value = ""; }
+async function give() {
+  const j = await act("give", { clue: $("#clueSel").value, target: $("#targetSel").value });
+  if (j.ok) toast("已发放");
+}
+async function release(id, name) { if (confirm(`释放【${name}】？原手机会掉线，新手机选这个角色时继承线索。`)) act("release", { char_id: id }); }
+
+function render(v) {
+  V = v; const a = v.admin;
+  $("#title").textContent = "管理 ·《" + v.title + "》";
+  $("#model").textContent = a.model;
+  $("#cur").textContent = `${v.phase.index + 1}/${v.phase.total} ${v.phase.title}（${PHASE_TYPE[v.phase.type] || v.phase.type}）`;
+  $("#pauseBtn").textContent = v.ai_paused ? "▶ 恢复AI" : "⏸ 暂停AI";
+  $("#pauseBtn").onclick = () => act(v.ai_paused ? "resume" : "pause");
+  $("#modeBtn").textContent = a.narration_mode === "ai" ? "旁白：AI润色" : "旁白：原文照念";
+  $("#phases").innerHTML = a.phases.map((p, i) => `
+    <button class="ph ${i === v.phase.index ? "cur" : ""}" onclick="if(confirm('跳到【${esc(p.title)}】？'))act('goto',{index:${i},narrate:true})">
+      <span class="muted">${i + 1}</span><span class="t">${esc(p.title)}</span>
+      <span class="chip">${PHASE_TYPE[p.type] || p.type}${p.minutes ? " · " + p.minutes + "分" : ""}</span></button>`).join("");
+  $("#players").innerHTML = v.players.map((p) => `<tr>
+      <td style="font-family:var(--serif)">${esc(p.char_name)}</td>
+      <td>${p.player ? esc(p.player) + (p.claimable ? ' <span class="chip">已释放</span>' : "") : '<span class="muted">空</span>'}</td>
+      <td>${p.voted ? '<span class="chip ok">已投</span>' : ""}</td>
+      <td style="text-align:right">${p.player && !p.claimable ? `<button class="btn small" onclick="release('${esc(p.char_id)}','${esc(p.char_name)}')">释放</button>` : ""}</td></tr>`).join("");
+  $("#voteBox").classList.toggle("hidden", !v.vote);
+  if (v.vote) $("#vote").textContent = v.vote.revealed ? v.vote.result : `已投 ${v.vote.voted} / ${v.vote.total}`;
+  const selC = $("#clueSel").value, selT = $("#targetSel").value;
+  $("#clueSel").innerHTML = a.clues.map((c) => `<option value="${esc(c.id)}">${esc(c.id)} · ${esc(c.title)}</option>`).join("");
+  $("#targetSel").innerHTML = '<option value="public">直接公开给所有人</option>' +
+    v.players.filter((p) => p.player).map((p) => `<option value="${esc(p.char_id)}">给 ${esc(p.char_name)}</option>`).join("");
+  if (selC) $("#clueSel").value = selC; if (selT) $("#targetSel").value = selT;
+  $("#clueTable").innerHTML = a.clues.map((c) => `<tr><td>${esc(c.id)}</td><td>${esc(c.title)}</td>
+    <td class="muted">${c.holder ? esc(c.holder) : "未发现"}</td><td>${c.public ? '<span class="chip on">公开</span>' : ""}</td></tr>`).join("");
+  $("#warnings").textContent = a.warnings.length ? a.warnings.slice().reverse().join("\n") : "暂无";
+  $("#summary").textContent = a.summary || "（还没有摘要）";
+  $("#memStat").textContent = `公开记录共 ${a.log_size} 条，其中 ${a.summarized_upto} 条已压缩进摘要，最近 ${a.log_size - a.summarized_upto} 条原样给AI。`;
+  $("#log").innerHTML = logHTML(v.log.slice().reverse());
+}
+
+if (!ADMIN) document.body.innerHTML = '<div style="padding:30px">请使用启动时命令行里打印的管理链接（带 ?admin= 的那个）。</div>';
+else connect({ role: "admin", admin: ADMIN }, { view: render });
+</script>
+</body>
+</html>

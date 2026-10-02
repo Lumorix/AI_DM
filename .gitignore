@@ -1,0 +1,17 @@
+# Local config (contains API keys) — copy config.example.yaml instead
+config.yaml
+
+# Runtime data
+saves/
+work/
+
+# Python
+__pycache__/
+*.py[cod]
+.venv/
+venv/
+
+# OS / editor
+.DS_Store
+.idea/
+.vscode/

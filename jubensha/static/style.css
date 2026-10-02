@@ -1,0 +1,94 @@
+:root {
+  --ink: #141116;
+  --ink-2: #1d1920;
+  --ink-3: #2a242d;
+  --line: #3a323d;
+  --paper: #efe6d3;
+  --paper-2: #e2d6bd;
+  --paper-ink: #2b2420;
+  --text: #e9e3d8;
+  --muted: #9b9198;
+  --red: #b3343a;
+  --red-soft: #b3343a33;
+  --brass: #c9a35b;
+  --green: #6f9e74;
+  --serif: "Noto Serif SC", "Source Han Serif SC", "Songti SC", "STSong", "SimSun", serif;
+  --sans: "PingFang SC", "Microsoft YaHei", "Noto Sans SC", "Hiragino Sans GB", system-ui, sans-serif;
+}
+* { box-sizing: border-box; }
+html, body { margin: 0; background: var(--ink); color: var(--text); font-family: var(--sans); }
+body { min-height: 100vh; -webkit-text-size-adjust: 100%; }
+button, input, select, textarea { font: inherit; color: inherit; }
+button { cursor: pointer; }
+h1, h2, h3 { font-family: var(--serif); font-weight: 700; margin: 0; letter-spacing: .04em; }
+.muted { color: var(--muted); }
+.hidden { display: none !important; }
+.row { display: flex; gap: 8px; align-items: center; }
+.grow { flex: 1; }
+.pre { white-space: pre-wrap; line-height: 1.75; }
+
+/* 按钮 */
+.btn {
+  border: 1px solid var(--line); background: var(--ink-3); border-radius: 10px;
+  padding: 10px 14px; transition: background .15s, transform .05s;
+}
+.btn:hover { background: #352e38; }
+.btn:active { transform: translateY(1px); }
+.btn:disabled { opacity: .45; cursor: not-allowed; }
+.btn.primary { background: var(--red); border-color: var(--red); color: #fff; }
+.btn.primary:hover { background: #c33e44; }
+.btn.ghost { background: transparent; }
+.btn.small { padding: 5px 10px; font-size: 13px; border-radius: 8px; }
+input[type=text], textarea, select {
+  width: 100%; background: var(--ink-2); border: 1px solid var(--line); border-radius: 10px;
+  padding: 10px 12px; outline: none;
+}
+input[type=text]:focus, textarea:focus, select:focus { border-color: var(--brass); }
+textarea { resize: vertical; min-height: 70px; }
+
+/* 纸质卡片：剧本、线索 */
+.paper {
+  background: var(--paper); color: var(--paper-ink); border-radius: 4px; padding: 16px 18px;
+  box-shadow: 0 1px 0 #fff6 inset, 0 8px 24px #0006;
+  background-image: repeating-linear-gradient(0deg, transparent 0 27px, #0000000a 27px 28px);
+}
+.paper h3 { font-size: 17px; margin-bottom: 8px; }
+.clue-card { position: relative; border-left: 4px solid var(--red); }
+.clue-card .tag {
+  position: absolute; top: 10px; right: 12px; font-size: 12px; color: var(--red);
+  border: 1px solid var(--red); padding: 1px 6px; border-radius: 3px; transform: rotate(4deg);
+}
+.clue-card img { max-width: 100%; border-radius: 3px; margin-top: 8px; }
+
+.chip { display: inline-block; font-size: 12px; padding: 2px 8px; border-radius: 99px; background: var(--ink-3); color: var(--muted); }
+.chip.on { background: var(--red-soft); color: #f0b8bb; }
+.chip.ok { background: #6f9e7433; color: #bfe0c2; }
+
+/* 记录流 */
+.log { display: flex; flex-direction: column; gap: 10px; }
+.msg { line-height: 1.7; }
+.msg .who { font-size: 12px; color: var(--muted); margin-bottom: 2px; }
+.msg .body { white-space: pre-wrap; }
+.msg.narration .body, .msg.reveal .body, .msg.answer .body { font-family: var(--serif); color: #f3ead9; }
+.msg.system .body, .msg.search .body { color: var(--muted); font-size: 13px; }
+.msg.clue .body { color: #f0c9a0; }
+.msg.note .body { color: #c9d6e8; }
+.msg.ask .body { color: var(--brass); }
+.msg.me .body { color: var(--brass); }
+.streaming::after { content: "▍"; animation: blink 1s steps(2) infinite; color: var(--brass); }
+@keyframes blink { 50% { opacity: 0; } }
+
+.toast {
+  position: fixed; left: 50%; bottom: 90px; transform: translateX(-50%); z-index: 50;
+  background: #000d; color: #fff; padding: 10px 16px; border-radius: 10px; max-width: 86vw;
+  font-size: 14px; animation: fade 2.6s forwards;
+}
+@keyframes fade { 0%, 80% { opacity: 1; } 100% { opacity: 0; } }
+
+.modal-bg { position: fixed; inset: 0; background: #000a; z-index: 40; display: flex; align-items: center; justify-content: center; padding: 16px; }
+.modal { max-width: 460px; width: 100%; }
+.timer { font-variant-numeric: tabular-nums; font-family: var(--serif); }
+.timer.over { color: var(--red); }
+.spinner { display: inline-block; width: 14px; height: 14px; border: 2px solid var(--muted); border-top-color: transparent; border-radius: 50%; animation: spin 1s linear infinite; vertical-align: -2px; }
+@keyframes spin { to { transform: rotate(360deg); } }
+.conn { position: fixed; top: 8px; right: 8px; font-size: 12px; z-index: 60; }
