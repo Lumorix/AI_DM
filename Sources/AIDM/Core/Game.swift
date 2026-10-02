@@ -104,10 +104,9 @@ final class Game {
 
     /// 复盘前检查是否出现禁用词。私聊给角色本人时，涉及本人名字的禁用词不算（凶手本人知道自己是凶手）。
     func leaks(_ text: String, exemptChar: String? = nil) -> String? {
-        if state.phaseIndex >= script.spoilerPhaseIndex { return nil }
         let exemptName = script.character(exemptChar)?.name
         let nt = norm(text)
-        for f in script.forbidden {
+        for (f, until) in script.forbiddenRules() where state.phaseIndex < until {
             if let n = exemptName, f.contains(n) { continue }
             let nf = norm(f)
             if !nf.isEmpty && nt.contains(nf) { return f }

@@ -47,9 +47,9 @@ enum Prompts {
             + "【最近的公开事件】\n\(fmtLog(unsummarized.suffix(recent)))"
     }
 
-    static func phaseBlock(_ script: Script, _ state: GameState, _ phase: Phase) -> String {
+    static func phaseBlock(_ script: Script, _ state: GameState, _ phase: Phase, includeNotes: Bool = true) -> String {
         var lines = ["【当前阶段】第\(state.phaseIndex + 1)/\(script.phases.count)阶段：\(phase.title)（类型：\(phase.type.rawValue)）"]
-        if !phase.dmNotes.isEmpty { lines.append("本阶段主持提示：\(phase.dmNotes)") }
+        if includeNotes && !phase.dmNotes.isEmpty { lines.append("本阶段主持提示：\(phase.dmNotes)") }
         if !state.publicClues.isEmpty {
             lines.append("已公开的线索：\n" + state.publicClues.compactMap { script.clue($0) }
                 .map { "- \($0.title)：\($0.text)" }.joined(separator: "\n"))
@@ -96,10 +96,10 @@ enum Prompts {
                 .user(dyn.filter { !$0.isEmpty }.joined(separator: "\n\n"))]
     }
 
-    // MARK: 旁白（不需要真相，不给就不会说漏）
+    // MARK: 旁白（不需要真相和主持提示，不给就不会说漏）
 
     static func narration(_ script: Script, _ state: GameState, _ phase: Phase, text: String) -> [ChatMessage] {
-        let user = "\(phaseBlock(script, state, phase))\n\n"
+        let user = "\(phaseBlock(script, state, phase, includeNotes: false))\n\n"
             + "【之前发生的事（摘要）】\n\(state.summary.isEmpty ? "（游戏刚开始）" : state.summary)\n\n"
             + "请用主持人的口吻，把下面这段主持词讲给玩家听。可以润色语气、加一点氛围，"
             + "但不能增加或删减任何信息，不能透露线索和真相，长度不超过原文的1.5倍。只输出要说的话。\n"

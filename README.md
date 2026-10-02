@@ -76,10 +76,13 @@ API Key 保存在 macOS 钥匙串里。主持和判定需要较强的推理和�
 
 编辑器右侧随时显示检查结果，⌘S 保存。示例剧本是只读的，要改请在剧本库“复制一份来修改”。
 
-命令行也能识别：
+**多重解答的剧本**（前面的答案会被后面推翻）：防剧透禁用词可以写成 `说法@阶段id`，表示到那个阶段才解禁，例如 `凶手是铃木美雪@p3_05`、`两座六角馆@p5_13`。不写 `@` 的禁用词在第一个“复盘”阶段（或 `dm.forbidden_until` 指定的阶段）解禁。
+
+命令行也能识别、检查：
 
 ```bash
 "build/AI 剧本杀.app/Contents/MacOS/AIDM" --ocr 剧本.pdf [--split] [--dpi 300]
+"build/AI 剧本杀.app/Contents/MacOS/AIDM" --check 剧本文件夹 [--rewrite]
 ```
 
 剧本、存档、识别结果都在 `~/Library/Application Support/AI DM/` 里（剧本库页面底部有链接）。

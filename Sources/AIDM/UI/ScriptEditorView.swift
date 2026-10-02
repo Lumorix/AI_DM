@@ -248,7 +248,7 @@ private struct OverviewForm: View {
                 InkEditor(text: $script.truth, minHeight: 220)
             }
             Field(title: "主持风格") { InkEditor(text: $script.style, minHeight: 70) }
-            Field(title: "防剧透禁用词", hint: "用逗号分隔。AI 的回复里出现这些说法会被拦截重答") {
+            Field(title: "防剧透禁用词", hint: "用逗号分隔。AI 的回复里出现这些说法会被拦截重答。写成“说法@阶段id”表示到那个阶段才解禁") {
                 InkEditor(text: listBinding($script.forbidden), minHeight: 50)
             }
             Field(title: "从哪个阶段开始可以说出真相", hint: "默认是第一个“复盘”阶段") {

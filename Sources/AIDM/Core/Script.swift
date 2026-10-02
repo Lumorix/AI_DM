@@ -123,6 +123,17 @@ struct Script: Equatable {
 
     var hasVote: Bool { phases.contains { $0.type == .vote } }
 
+    /// 禁用词可以写成“文本@阶段id”：到那个阶段才解禁（适合多重解答、真相分几次揭晓的剧本）
+    func forbiddenRules() -> [(text: String, until: Int)] {
+        forbidden.compactMap { f in
+            if let at = f.lastIndex(of: "@") {
+                let pid = String(f[f.index(after: at)...])
+                if let i = phases.firstIndex(where: { $0.id == pid }) { return (String(f[..<at]), i) }
+            }
+            return f.isEmpty ? nil : (f, spoilerPhaseIndex)
+        }
+    }
+
     func unlockedActs(upTo phaseIndex: Int) -> [String] {
         var acts: [String] = []
         for p in phases.prefix(phaseIndex + 1) {
@@ -315,7 +326,12 @@ enum ScriptIO {
             }
         }
         if let f = s.forbiddenUntil, !pids.contains(f) { W("dm.forbidden_until 指向的阶段 '\(f)' 不存在") }
-        if !s.phases.contains(where: { $0.type == .reveal }) && s.forbiddenUntil == nil && !s.forbidden.isEmpty {
+        for f in s.forbidden {
+            if let at = f.lastIndex(of: "@"), !pids.contains(String(f[f.index(after: at)...])) {
+                W("禁用词「\(f)」@ 后面的阶段 id 不存在")
+            }
+        }
+        if !s.phases.contains(where: { $0.type == .reveal }) && s.forbiddenUntil == nil && s.forbidden.contains(where: { !$0.contains("@") }) {
             W("没有 reveal（复盘）阶段，禁用词会一直拦截。可以用 dm.forbidden_until 指定从哪个阶段开始可以说出真相")
         }
         return out
