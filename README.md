@@ -175,3 +175,4 @@ Resources/
 ```
 
 剧本格式（`script.yaml`）参考 `Resources/Demo/script.yaml`，用剧本编辑器改就不用碰 YAML。
+
