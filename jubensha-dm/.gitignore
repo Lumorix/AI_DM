@@ -1,0 +1,45 @@
+# 编译产物
+.build/
+build/
+.swiftpm/
+
+# OS / 编辑器
+.DS_Store
+__MACOSX/
+.idea/
+.vscode/
+
+# Python 虚拟环境、缓存
+data/LocalTTS/.venv/
+data/LocalTTS/hf-cache/
+__pycache__/
+*.pyc
+
+# 下载的 AI / TTS 模型权重
+data/LocalTTS/models/
+*.safetensors
+*.ckpt
+*.pth
+*.pt
+
+# 有版权的剧本原件、第三方素材
+*.pdf
+【雪熊企划】*/
+yachiyo-qwen-voice-reply-main/
+
+# 大型语音 / 动画训练素材
+AI_voice_training/
+
+# 训练产生的中间结果
+**/checkpoints/
+**/outputs/
+**/runs/
+**/logs/
+**/cache/
+**/temp/
+**/tmp/
+
+# 临时文件
+*.log
+*.tmp
+*.cache
