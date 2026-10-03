@@ -145,7 +145,31 @@ final class AppModel {
 
     init() {
         reloadLibrary()
+        autoPickVoice()
         applyVoice()
+    }
+
+    /// 本机有八千代的音色时自动用上（用户自己没选过声音时；训练好的模型出来后自动换成训练版）
+    func autoPickVoice() {
+        let voices = LocalTTS.voices().filter { LocalTTS.isSoVITS($0) ? SoVITSService.isInstalled : LocalTTS.isInstalled }
+        guard let best = voices.first(where: LocalTTS.isSoVITS) ?? voices.first(where: { $0.hasSuffix("综合") }) ?? voices.first else { return }
+        let last = UserDefaults.standard.string(forKey: "autoVoice")
+        let neverChosen = settings.voice.engine == .system && settings.voice.localVoice.isEmpty
+        let stillAuto = settings.voice.engine == .local && settings.voice.localVoice == last
+        if (neverChosen && last == nil) || (stillAuto && best != last) {
+            settings.voice.engine = .local
+            settings.voice.localVoice = best
+            UserDefaults.standard.set(best, forKey: "autoVoice")
+        }
+    }
+
+    /// 当前用的声音（给界面显示）
+    var voiceLabel: String {
+        switch settings.voice.engine {
+        case .system: "系统声音"
+        case .qwen: "阿里云音色"
+        case .local: settings.voice.localVoice.isEmpty ? "本机音色" : "八千代 · \(settings.voice.localVoice)"
+        }
     }
 
     /// 百炼 Key：单独填的优先；没填而 AI 主持用的是通义千问（同一个百炼账号），就借用那个
@@ -355,6 +379,10 @@ final class AppModel {
             }
             let port = try await server.start(preferred: UInt16(clamping: settings.port))
             session = Session(game: game, server: server, router: router, port: port, ip: LAN.address())
+            if settings.voice.engine == .local, settings.voice.usable {      // 提前加载本机音色，第一句不用等
+                let v = settings.voice.localVoice
+                Task { _ = try? await LocalTTS.shared.synthesize("好。", voice: v) }
+            }
         } catch {
             alert = .init(title: "无法开始游戏", message: error.localizedDescription)
         }

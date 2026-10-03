@@ -45,10 +45,20 @@ struct DMView: View {
                 .buttonStyle(.ink(.primary, large: true))
                 .disabled(game.state.phaseIndex >= game.script.phases.count - 1)
                 .keyboardShortcut(.rightArrow, modifiers: .command)
-            Button { narrator.enabled.toggle() } label: {
+            Button {
+                if !narrator.enabled && model.settings.voice.engine == .system {
+                    model.autoPickVoice()       // 有八千代的声音就用她的
+                    if model.settings.voice.engine == .system, let v = LocalTTS.voices().first {
+                        model.settings.voice.engine = .local
+                        model.settings.voice.localVoice = v
+                    }
+                }
+                narrator.enabled.toggle()
+            } label: {
                 Image(systemName: narrator.enabled ? "speaker.wave.2.fill" : "speaker.slash")
             }
-            .buttonStyle(.ink(.secondary, large: true)).help(narrator.enabled ? "关闭语音" : "让 DM 出声")
+            .buttonStyle(.ink(.secondary, large: true))
+            .help(narrator.enabled ? "关闭语音（现在：\(model.voiceLabel)）" : "让 DM 出声（\(model.voiceLabel)）")
             Menu {
                 Button("主持台（流程、玩家、线索）") { openWindow(id: "console") }
                 Button("大屏（投到电视）") { openWindow(id: "stage") }

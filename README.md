@@ -85,7 +85,7 @@ API Key 保存在 macOS 钥匙串里。主持和判定需要较强的推理和�
 "build/AI 剧本杀.app/Contents/MacOS/AIDM" --check 剧本文件夹 [--rewrite]
 ```
 
-剧本、存档、识别结果都在 `~/Library/Application Support/AI DM/` 里（剧本库页面底部有链接）。
+剧本、存档、识别结果、语音模型都在项目文件夹的 `data/` 里（剧本库页面底部有链接；`data/` 不会上传到 GitHub）。项目文件夹外运行时改用 `~/Library/Application Support/AI DM/`。
 
 ## 五、DM 形象（Live2D）
 

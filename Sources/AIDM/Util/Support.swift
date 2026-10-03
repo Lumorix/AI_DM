@@ -8,11 +8,26 @@ import Security
 // MARK: - 文件位置
 
 enum Paths {
-    /// ~/Library/Application Support/AI DM
+    /// 应用数据（剧本、存档、语音模型……）放在哪：
+    /// 1. 设置里指定的 dataRoot；2. 应用旁边的项目文件夹里有 data/ 就用它（build/AI 剧本杀.app → ../data）；
+    /// 3. 否则 ~/Library/Application Support/AI DM
     static let support: URL = {
-        let u = FileManager.default.urls(for: .applicationSupportDirectory, in: .userDomainMask)[0]
-            .appendingPathComponent("AI DM", isDirectory: true)
-        try? FileManager.default.createDirectory(at: u, withIntermediateDirectories: true)
+        let fm = FileManager.default
+        var candidates: [URL] = []
+        if let custom = UserDefaults.standard.string(forKey: "dataRoot"), !custom.isEmpty {
+            candidates.append(URL(fileURLWithPath: custom, isDirectory: true))
+        }
+        let projectOfApp = Bundle.main.bundleURL.deletingLastPathComponent().deletingLastPathComponent()
+        candidates.append(projectOfApp.appendingPathComponent("data", isDirectory: true))
+        let repo = URL(fileURLWithPath: #filePath).deletingLastPathComponent().deletingLastPathComponent()
+            .deletingLastPathComponent().deletingLastPathComponent()
+        candidates.append(repo.appendingPathComponent("data", isDirectory: true))       // swift run 开发时
+        var isDir: ObjCBool = false
+        if let u = candidates.first(where: { fm.fileExists(atPath: $0.path, isDirectory: &isDir) && isDir.boolValue }) {
+            return u
+        }
+        let u = fm.urls(for: .applicationSupportDirectory, in: .userDomainMask)[0].appendingPathComponent("AI DM", isDirectory: true)
+        try? fm.createDirectory(at: u, withIntermediateDirectories: true)
         return u
     }()
 
