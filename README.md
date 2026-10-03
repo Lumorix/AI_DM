@@ -14,7 +14,7 @@
                 手机浏览器 /player：剧本 · 线索 · 搜证 · 问 DM · 投票
 ```
 
-**Quick start (English):** on a Mac with macOS 14+, install the Xcode command line tools (`xcode-select --install`), then run `./build.sh` and open `build/AI 剧本杀.app`. Pick the demo script and click 开始游戏. Players join by scanning the QR code on the big screen with their phones (same Wi‑Fi).
+**Quick start (English):** on a Mac with macOS 14+, install Xcode command line tools supporting Swift 6 (`xcode-select --install`), enter `jubensha-dm/` from the repository root, then run `./build.sh` and open `build/AI 剧本杀.app`. Pick the demo script and click 开始游戏. Players join by scanning the QR code on the big screen with their phones (same Wi‑Fi).
 
 ## 一、安装
 
@@ -24,9 +24,10 @@
 xcode-select --install
 ```
 
-然后在项目文件夹里：
+然后从仓库根目录进入应用文件夹：
 
 ```bash
+cd jubensha-dm
 ./build.sh
 ```
 
@@ -176,16 +177,28 @@ Resources/
 
 剧本格式（`script.yaml`）参考 `Resources/Demo/script.yaml`，用剧本编辑器改就不用碰 YAML。
 
-# git 
+## Git 协作
+
+新任务从最新的 `main` 创建功能分支，在 Pull Request 中审查后合并：
+
+```bash
+git switch main
+git pull --ff-only origin main
+git switch -c feature/your-task
 git status --untracked-files=all
-git rev-parse --show-toplevel
-git ls-files
-git check-ignore -v data/example.json
-open -e .gitignore
-git status --untracked-files=all
-git add .
-git status
-git commit -m "update"
-git push
-git lfs ls-files -s
-git lfs ls-files -n
+# 只添加本次修改的文件，检查差异后提交
+git add <本次修改的文件路径>
+git diff --cached
+git commit -m "Describe the change"
+git push -u origin feature/your-task
+```
+
+创建 Pull Request：`base: main`，`compare: feature/your-task`。合并后再更新本地 `main`。
+若当前存在未提交修改或未完成的合并，先检查 `git status`，保留工作后再切换分支。
+`Eric-upload` 已通过合并提交加入 `main`，后续功能分支不需要重新 `git init` 或使用 `--allow-unrelated-histories`。
+
+本仓库同时保留 Mac 原生版与 Python 网页版；应用代码和入口均在 `jubensha-dm/`。
+Python 网页版可在该目录运行 `start.bat`（Windows）或 `./start.sh`（Mac/Linux）。
+Mac 原生版需要 macOS 14+ 和支持 Swift 6 的命令行工具；Windows 无法编译该原生应用。
+`.venv/`、本机 `config.yaml`、存档、OCR 和语音缓存不应提交。
+现有受版本控制的运行数据不会因新增 `.gitignore` 自动移除，应另开清理 PR 审查。

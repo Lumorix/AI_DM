@@ -10,10 +10,25 @@ __MACOSX/
 .vscode/
 
 # Python 虚拟环境、缓存
+.venv/
+venv/
+.pytest_cache/
+.mypy_cache/
+.ruff_cache/
 data/LocalTTS/.venv/
 data/LocalTTS/hf-cache/
 __pycache__/
 *.pyc
+
+# 本机配置与运行数据（已有受控文件需另行审查，不会自动移除）
+/config.yaml
+.env
+.env.*
+!.env.example
+/saves/
+/data/Saves/
+/data/OCR/
+/data/VoiceCache/
 
 # 下载的 AI / TTS 模型权重
 data/LocalTTS/models/
