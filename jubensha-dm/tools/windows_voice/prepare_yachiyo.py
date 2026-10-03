@@ -1,5 +1,6 @@
 """Relabel existing Yachiyo clips locally; keep originals unchanged."""
 from pathlib import Path
+import argparse
 import hashlib
 import json
 import os
@@ -11,6 +12,9 @@ os.environ.setdefault('HF_HOME', str(TTS / 'hf-cache/windows'))
 
 
 def main():
+    parser = argparse.ArgumentParser()
+    parser.add_argument('--asr-model', choices=['small', 'medium'], default='small')
+    args = parser.parse_args()
     import torch
     import numpy as np
     import soundfile as sf
@@ -24,10 +28,10 @@ def main():
     source = TTS / 'voices/yachiyo/dataset'
     output = TTS / 'windows/outputs' / ('yachiyo-data-' + time.strftime('%Y%m%d-%H%M%S'))
     (output / 'clips').mkdir(parents=True, exist_ok=False)
-    model_id = 'Systran/faster-whisper-small'
+    model_id = f'Systran/faster-whisper-{args.asr_model}'
     revision = HfApi().model_info(model_id).sha
     model_dir = snapshot_download(model_id, revision=revision,
-        local_dir=TTS / 'models/faster-whisper-small', max_workers=2)
+        local_dir=TTS / f'models/faster-whisper-{args.asr_model}', max_workers=2)
     asr = WhisperModel(model_dir, device='cuda', compute_type='float16')
     accepted, rejected = [], []
     files = sorted(source.glob('*.wav'))
@@ -61,6 +65,10 @@ def main():
         with (output / 'transcripts.jsonl').open('a', encoding='utf-8') as log:
             log.write(json.dumps(item, ensure_ascii=False) + '\n')
         print(f'{index+1}/{len(files)} accepted={len(accepted)} {file.name}: {text}', flush=True)
+    audit = {'asr_model': model_id, 'asr_revision': revision,
+             'accepted': len(accepted), 'rejected': rejected,
+             'minimum_accepted': 15, 'human_reviewed': False}
+    (output / 'screening.json').write_text(json.dumps(audit, ensure_ascii=False, indent=2), encoding='utf-8')
     if len(accepted) < 15:
         raise RuntimeError(f'Only {len(accepted)} accepted clips: inspect {output}')
     # Chronological split with a one-clip gap; do not train on validation clips.
