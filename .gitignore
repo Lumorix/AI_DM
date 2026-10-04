@@ -1,0 +1,18 @@
+# 仓库根目录及其他子目录的本机文件
+.DS_Store
+__MACOSX/
+Thumbs.db
+Desktop.ini
+.env
+.env.*
+!.env.example
+!.env.*.example
+.venv/
+venv/
+__pycache__/
+*.pyc
+*.pyo
+*.log
+*.tmp
+
+# 应用模型、存档和生成物的具体规则在 jubensha-dm/.gitignore

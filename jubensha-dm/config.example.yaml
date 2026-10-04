@@ -9,6 +9,7 @@ llm:
   temperature: 0.7
   timeout: 180            # 秒；本地模型慢可以调大
   max_tokens: 1500
+  context_budget: 32768   # 保守估算总预算（输入UTF-8字节 + 输出tokens + 余量），需按实际模型容量调整
 
   # 可选：记忆压缩（摘要）这种简单活交给便宜/本地模型，省钱。删掉这一段就全部用上面的模型。
   # cheap:

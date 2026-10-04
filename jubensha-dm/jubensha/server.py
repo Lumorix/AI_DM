@@ -12,6 +12,7 @@ from starlette.responses import FileResponse, JSONResponse, Response, StreamingR
 from starlette.routing import Route
 
 from .engine import Game
+from .voice_proxy import voice_proxy
 
 STATIC = Path(__file__).parent / "static"
 
@@ -33,7 +34,8 @@ def create_app(game: Game, lan_url: str = "") -> Starlette:
 
     async def body(request: Request) -> dict:
         try:
-            return await request.json()
+            data = await request.json()
+            return data if isinstance(data, dict) else {}
         except (json.JSONDecodeError, ValueError):
             return {}
 
@@ -50,6 +52,12 @@ def create_app(game: Game, lan_url: str = "") -> Starlette:
     # ---------- 实时推送 ----------
     async def events(request: Request):
         role = request.query_params.get("role", "screen")
+        session_token = request.query_params.get("token")
+        def session_valid():
+            if role != "player":
+                return True
+            player = st.player_by_token(session_token)
+            return player is not None and audience == f"player:{player.char_id}"
         if role == "admin":
             if not is_admin(request):
                 return err("管理密码不对", 403)
@@ -66,27 +74,26 @@ def create_app(game: Game, lan_url: str = "") -> Starlette:
 
         async def gen():
             try:
+                if not session_valid():
+                    yield 'data: {"type": "kicked"}\n\n'
+                    return
                 yield f"data: {json.dumps({'type': 'view', 'data': view(), 'lan_url': lan_url}, ensure_ascii=False)}\n\n"
                 while True:
                     try:
                         ev = await asyncio.wait_for(sub.queue.get(), timeout=15)
                     except asyncio.TimeoutError:
+                        if not session_valid():
+                            yield 'data: {"type": "kicked"}\n\n'
+                            break
                         if await request.is_disconnected():
                             break
                         yield ": ping\n\n"
                         continue
+                    # Bind every event to the authenticated device, not only its character.
+                    if not session_valid():
+                        yield 'data: {"type": "kicked"}\n\n'
+                        break
                     if ev["type"] == "refresh":
-                        # 合并连续的刷新，避免刷屏
-                        while not sub.queue.empty():
-                            nxt = sub.queue.get_nowait()
-                            if nxt["type"] != "refresh":
-                                yield f"data: {json.dumps(nxt, ensure_ascii=False)}\n\n"
-                        if audience.startswith("player:") and audience[7:] not in st.players:
-                            yield f"data: {json.dumps({'type': 'kicked'})}\n\n"
-                            break
-                        if audience.startswith("player:") and st.players[audience[7:]].claimable:
-                            yield f"data: {json.dumps({'type': 'kicked'})}\n\n"
-                            break
                         yield f"data: {json.dumps({'type': 'view', 'data': view(), 'lan_url': lan_url}, ensure_ascii=False)}\n\n"
                     else:
                         yield f"data: {json.dumps(ev, ensure_ascii=False)}\n\n"
@@ -180,7 +187,10 @@ def create_app(game: Game, lan_url: str = "") -> Starlette:
         elif action == "prev":
             await game.goto(st.phase_index - 1, narrate=False)
         elif action == "goto":
-            await game.goto(int(d.get("index", 0)), narrate=bool(d.get("narrate", True)))
+            index = d.get("index")
+            if type(index) is not int or not 0 <= index < len(game.script.phases):
+                return err("阶段编号必须是有效范围内的整数")
+            await game.goto(index, narrate=bool(d.get("narrate", True)))
         elif action == "replay":
             game.start_narration()
         elif action == "pause":
@@ -221,6 +231,8 @@ def create_app(game: Game, lan_url: str = "") -> Starlette:
         return FileResponse(STATIC / "index.html", headers={"Cache-Control": "no-cache"})
 
     routes = [
+        Route("/api/voice/health", voice_proxy),
+        Route("/api/voice/speech", voice_proxy, methods=["POST"]),
         Route("/", index),
         Route("/screen", page("screen.html")),
         Route("/player", page("player.html")),

@@ -115,6 +115,7 @@ final class WebRouter {
     private func events(_ req: HTTPRequest, _ conn: NWConnection, _ game: Game) -> HTTPResponse {
         guard let p = game.state.player(byToken: req.query["token"]) else { return .error("请先选择角色", status: 401) }
         let charId = p.charId
+        let sessionToken = p.token
         let ch = SSEChannel(conn)
         let chId = UUID()
         channels[chId] = ch
@@ -126,6 +127,11 @@ final class WebRouter {
         let pending = Pending()
         let subId = game.bus.subscribe(audience: "player:\(charId)") { [weak game, weak ch] ev in
             guard let game, let ch else { return }
+            guard game.state.player(byToken: sessionToken)?.charId == charId else {
+                ch.send(["type": "kicked"])
+                ch.close()
+                return
+            }
             switch ev {
             case .event(let e):
                 ch.send(e)
@@ -135,7 +141,7 @@ final class WebRouter {
                 DispatchQueue.main.async {
                     MainActor.assumeIsolated {
                         pending.refresh = false
-                        guard let pl = game.state.players[charId], !pl.claimable else {
+                        guard game.state.player(byToken: sessionToken)?.charId == charId else {
                             ch.send(["type": "kicked"])
                             ch.close()
                             return

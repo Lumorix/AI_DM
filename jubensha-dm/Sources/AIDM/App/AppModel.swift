@@ -365,7 +365,11 @@ final class AppModel {
                 state = GameState(scriptTitle: script.title)
                 state.logPublic(.system, "系统", "《\(script.title)》即将开始。请用手机扫码或打开链接选择角色。")
                 if let first = script.phases.first, !first.dmScript.isEmpty {   // 第一阶段的主持词先显示在大屏上
-                    state.logPublic(.narration, "DM", first.dmScript, phase: first.id)
+                    if script.firstForbidden(first.dmScript, phaseIndex: 0) != nil {
+                        state.warn("开局旁白命中禁用词，已在公开前拦截，请主持人检查")
+                    } else {
+                        state.logPublic(.narration, "DM", first.dmScript, phase: first.id)
+                    }
                 }
                 try state.save(to: savePath)
             }

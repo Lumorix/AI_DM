@@ -2,6 +2,7 @@
 from __future__ import annotations
 
 import sys
+import re
 from dataclasses import dataclass, field
 from pathlib import Path
 
@@ -69,6 +70,32 @@ class Script:
     clues: dict[str, Clue]
     phases: list[Phase]
     endings: dict[str, str]
+    forbidden_until: str | None = None
+
+    def forbidden_rules(self) -> list[tuple[str, int]]:
+        indices = {p.id: i for i, p in enumerate(self.phases)}
+        default = (indices.get(self.forbidden_until, len(self.phases))
+                   if self.forbidden_until else
+                   next((i for i, p in enumerate(self.phases) if p.type == "reveal"), len(self.phases)))
+        rules = []
+        for entry in self.forbidden:
+            word, sep, target = entry.rpartition("@")
+            word = word.strip() if sep else entry.strip()
+            until = indices.get(target.strip(), len(self.phases)) if sep else default
+            if word:
+                rules.append((word, until))
+        return rules
+
+    def first_forbidden(self, text: str, phase_index: int, exempt_name: str | None = None) -> str | None:
+        def norm(value):
+            return re.sub(r"[\s，。,.！!？?：:“”\"'‘’、]", "", value)
+        normalized = norm(text)
+        for word, until in self.forbidden_rules():
+            if phase_index >= until or (exempt_name and exempt_name in word):
+                continue
+            if norm(word) and norm(word) in normalized:
+                return word
+        return None
 
     def character(self, cid: str) -> Character | None:
         return next((c for c in self.characters if c.id == cid), None)
@@ -146,6 +173,7 @@ def load_script(folder: str | Path) -> Script:
         players=int(meta.get("players") or len(characters)), truth=_s(dm.get("truth")),
         style=_s(dm.get("style")), forbidden=_as_list(dm.get("forbidden")),
         characters=characters, clues=clues, phases=phases,
+        forbidden_until=_s(dm.get("forbidden_until")) or None,
         endings={str(k): _s(v) for k, v in (raw.get("endings") or {}).items()})
     problems = validate(script)
     errors = [m for lvl, m in problems if lvl == "错误"]
@@ -181,6 +209,13 @@ def validate(s: Script) -> list[tuple[str, str]]:
     pids = [p.id for p in s.phases]
     for dup in {i for i in pids if pids.count(i) > 1}:
         E(f"阶段id重复：{dup}")
+
+    if s.forbidden_until and s.forbidden_until not in pids:
+        W(f"dm.forbidden_until 指向不存在的阶段 '{s.forbidden_until}'；禁用词将保持锁定")
+    for entry in s.forbidden:
+        word, sep, target = entry.rpartition("@")
+        if sep and (not word.strip() or target.strip() not in pids):
+            E(f"无效禁用词规则 '{entry}'：需要非空文本和有效阶段 id")
 
     unlocked = set()
     used_clues = set()

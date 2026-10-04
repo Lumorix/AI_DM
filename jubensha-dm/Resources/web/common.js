@@ -52,31 +52,60 @@ function logHTML(entries, meName) {
 
 // SSE 连接，断了自动重连（手机锁屏再打开也能接上）
 function connect(query, handlers) {
-  let es, retry = 1000;
+  let es, retry = 1000, retryTimer = null, stopped = false;
   const badge = document.createElement("div");
   badge.className = "conn chip on hidden";
   document.body.appendChild(badge);
   const setConn = (ok) => { badge.textContent = ok ? "" : "重新连接中…"; badge.classList.toggle("hidden", ok); };
+  function cancelRetry() {
+    if (retryTimer !== null) clearTimeout(retryTimer);
+    retryTimer = null;
+  }
+  function close() {
+    stopped = true;
+    cancelRetry();
+    if (es) es.close();
+    document.removeEventListener("visibilitychange", wake);
+    badge.remove();
+  }
   function open() {
-    es = new EventSource("/api/events?" + new URLSearchParams(query));
-    es.onopen = () => { retry = 1000; setConn(true); };
-    es.onmessage = (m) => {
-      const ev = JSON.parse(m.data);
+    if (stopped) return;
+    cancelRetry();
+    if (es) es.close();
+    const stream = es = new EventSource("/api/events?" + new URLSearchParams(query));
+    const active = () => !stopped && es === stream;
+    let checking = false;
+    stream.onopen = () => { if (active()) { retry = 1000; setConn(true); } };
+    stream.onmessage = (m) => {
+      if (!active()) return;
+      let ev;
+      try { ev = JSON.parse(m.data); } catch (_) { return; }
+      if (!ev || typeof ev !== "object") return;
       if (ev.type === "view") { syncClock(ev.data.now); handlers.view && handlers.view(ev.data, ev); }
-      else if (ev.type === "kicked") { es.close(); handlers.kicked && handlers.kicked(); }
+      else if (ev.type === "kicked") { close(); handlers.kicked && handlers.kicked(); }
       else handlers.event && handlers.event(ev);
     };
-    es.onerror = async () => {
-      es.close(); setConn(false);
-      if (handlers.check && !(await handlers.check())) return;
-      setTimeout(open, retry); retry = Math.min(retry * 2, 10000);
+    stream.onerror = async () => {
+      if (!active() || checking) return;
+      checking = true;
+      stream.close(); setConn(false);
+      let allowed = true;
+      try { if (handlers.check) allowed = await handlers.check(); } catch (_) { /* Retry network failures. */ }
+      if (!active()) return;
+      if (!allowed) { close(); return; }
+      retryTimer = setTimeout(open, retry);
+      retry = Math.min(retry * 2, 10000);
     };
   }
+  function wake() {
+    if (!stopped && document.visibilityState === "visible" && es && es.readyState === 2) {
+      retry = 1000;
+      open();
+    }
+  }
+  document.addEventListener("visibilitychange", wake);
   open();
-  document.addEventListener("visibilitychange", () => {
-    if (document.visibilityState === "visible" && es && es.readyState === 2) { retry = 1000; open(); }
-  });
-  return { close: () => es && es.close() };
+  return { close };
 }
 
 // 图标（线条风格，和 Mac 端一致）

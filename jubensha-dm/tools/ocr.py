@@ -12,7 +12,7 @@
   tesseract 需要自己装 tesseract 和中文语言包 chi_sim
 
 识别过的页会跳过，中途断了重新运行会接着做。
-输出：work/<文件名>.txt（整本，带 === 第N页 === 标记），work/<文件名>/p0001.txt（每页）
+输出：work/<文件名>-<内容与参数指纹>.txt（整本），同名指纹目录内保存逐页缓存；旧文件保留。
 """
 from __future__ import annotations
 
@@ -25,6 +25,7 @@ from pathlib import Path
 
 ROOT = Path(__file__).resolve().parent.parent
 sys.path.insert(0, str(ROOT))
+from tools.ocr_identity import cache_identity, read_page, write_atomic
 
 IMG_EXT = {".jpg", ".jpeg", ".png", ".webp", ".bmp", ".tif", ".tiff"}
 END_PUNCT = tuple("。！？!?…」』”\"：:）)")
@@ -98,12 +99,17 @@ class TesseractEngine:
 
     def recognize(self, img) -> str:
         import subprocess, tempfile
+        # Close the temporary handle before PIL/Tesseract open it on Windows.
         with tempfile.NamedTemporaryFile(suffix=".png", delete=False) as f:
-            img.save(f.name)
-            r = subprocess.run(["tesseract", f.name, "-", "-l", self.lang, "--psm", "6"],
-                               capture_output=True, text=True)
-        if r.returncode != 0:
-            raise SystemExit(f"tesseract 出错（是否装了 {self.lang} 语言包？）：{r.stderr[:200]}")
+            name = f.name
+        try:
+            img.save(name)
+            r = subprocess.run(["tesseract", name, "-", "-l", self.lang, "--psm", "6"],
+                               capture_output=True, text=True, encoding="utf-8", errors="replace")
+            if r.returncode != 0:
+                raise RuntimeError(f"tesseract 出错（是否装了 {self.lang} 语言包？）：{r.stderr[:200]}")
+        finally:
+            Path(name).unlink(missing_ok=True)
         lines = [l.replace(" ", "") if self.lang.startswith("chi") else l for l in r.stdout.splitlines()]
         return "\n".join(lines).strip()
 
@@ -182,9 +188,12 @@ async def run(files: list[Path], out: Path, engine_name: str, dpi: int, split: b
     else:
         engine = RapidEngine()
 
+    outputs = []
     for f in files:
         stem = f.stem if not f.is_dir() else f.name
-        page_dir = out / stem
+        identity = cache_identity(f, engine_name, dpi, split, lang, cfg, VISION_PROMPT)
+        output_name = f"{stem}-{identity}"
+        page_dir = out / output_name
         page_dir.mkdir(parents=True, exist_ok=True)
         total = count_pages(f)
         print(f"\n《{stem}》共 {total} 页 → {page_dir}")
@@ -195,8 +204,9 @@ async def run(files: list[Path], out: Path, engine_name: str, dpi: int, split: b
             for j, part in enumerate(parts):
                 name = f"p{i:04d}" + (f"{'ab'[j]}" if split else "")
                 tf = page_dir / f"{name}.txt"
-                if tf.exists():
-                    page_texts.append(tf.read_text(encoding="utf-8"))
+                cached = read_page(tf)
+                if cached is not None:
+                    page_texts.append(cached)
                     continue
                 try:
                     if engine_name == "vision":
@@ -206,16 +216,19 @@ async def run(files: list[Path], out: Path, engine_name: str, dpi: int, split: b
                 except Exception as e:  # noqa: BLE001
                     print(f"  第{i}页识别失败：{e}（重新运行会重试这一页）")
                     continue
-                tf.write_text(t, encoding="utf-8")
+                if t.strip():
+                    write_atomic(tf, t)
                 page_texts.append(t)
             texts.append((i, "\n".join(page_texts)))
             n_chars = sum(len(t) for t in page_texts)
             print(f"  第{i}/{total}页  {n_chars}字" + ("  ⚠ 几乎没识别出字，检查一下这页" if n_chars < 20 else ""))
-        full = out / f"{stem}.txt"
-        full.write_text("\n\n".join(f"=== 第{i}页 ===\n{t}" for i, t in texts), encoding="utf-8")
+        full = out / f"{output_name}.txt"
+        write_atomic(full, "\n\n".join(f"=== 第{i}页 ===\n{t}" for i, t in texts))
+        outputs.append(full)
         print(f"  完成 → {full}")
-    print("\n下一步：python -m tools.draft " + " ".join(str(out / ((f.stem if not f.is_dir() else f.name) + '.txt')) for f in files)
-          + " --out scripts/我的剧本")
+    print("\n识别结果：" + "、".join(str(p) for p in outputs))
+    print("下一步按文件类型用 tools/draft.py 的 --dm、--char 或 --clues 参数整理（见 --help）。")
+    return outputs
 
 
 def main():
@@ -229,12 +242,19 @@ def main():
     ap.add_argument("--config", default=str(ROOT / "config.yaml"))
     a = ap.parse_args()
     cfg = {}
-    if a.engine == "vision":
+    p = Path(a.config)
+    if p.exists():
         import yaml
-        p = Path(a.config)
-        if not p.exists():
-            raise SystemExit("用 vision 引擎需要先配置 config.yaml（llm 或 vision 部分）")
-        cfg = yaml.safe_load(p.read_text(encoding="utf-8")) or {}
+        try:
+            cfg = yaml.safe_load(p.read_text(encoding="utf-8")) or {}
+            if not isinstance(cfg, dict):
+                raise ValueError("配置顶层必须是 YAML 对象")
+        except (OSError, ValueError, yaml.YAMLError) as exc:
+            raise SystemExit(f"OCR配置无效：{exc}") from exc
+    elif a.engine == "vision":
+        raise SystemExit("用 vision 引擎需要先配置 config.yaml（llm 或 vision 部分）")
+    if a.dpi <= 0:
+        raise SystemExit("dpi 必须大于0")
     files = [Path(x) for x in a.files]
     for f in files:
         if not f.exists():

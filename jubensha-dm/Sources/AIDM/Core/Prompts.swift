@@ -3,7 +3,7 @@
 // 上下文结构（解决10小时上下文不够的核心）：
 //   [system] 固定部分：身份 + 规则 + 真相 + 角色一览     ← 整局不变，云端API可命中前缀缓存
 //   [user]   变动部分：当前阶段 + 线索状态 + 公开摘要 + 最近事件 + 该玩家私聊摘要 + 问题
-// 每次调用都重新拼装，长度基本恒定，不会随游戏时长增长。
+// 保留未摘要事件，发送前按预算检查；超限明确拒绝，不静默漏掉积压记录。
 import Foundation
 
 enum Prompts {
@@ -44,7 +44,7 @@ enum Prompts {
     static func memoryBlock(_ state: GameState, recent: Int) -> String {
         let unsummarized = state.publicLog.dropFirst(state.summarizedUpto)
         return "【之前发生的事（摘要）】\n\(state.summary.isEmpty ? "（游戏刚开始）" : state.summary)\n\n"
-            + "【最近的公开事件】\n\(fmtLog(unsummarized.suffix(recent)))"
+            + "【最近的公开事件】\n\(fmtLog(unsummarized))"
     }
 
     static func phaseBlock(_ script: Script, _ state: GameState, _ phase: Phase, includeNotes: Bool = true) -> String {
@@ -71,14 +71,14 @@ enum Prompts {
             .filter { !player.clues.contains($0.id) && !state.publicClues.contains($0.id) }
 
         let priv = state.privateLog[charId] ?? []
-        let privRecent = Array(priv.dropFirst(state.privateSummarizedUpto[charId] ?? 0).suffix(privateKeep))
+        let privRecent = Array(priv.dropFirst(state.privateSummarizedUpto[charId] ?? 0))
         let privSummary = state.privateSummary[charId] ?? ""
 
         let dyn: [String] = [
             phaseBlock(script, state, phase),
             memoryBlock(state, recent: recent),
             "【提问的玩家】\(player.name) 扮演 \(ch.name)",
-            ch.secretBrief.isEmpty ? "" : "该角色的秘密（只有你和这位玩家知道）：\(ch.secretBrief)",
+            (ch.secretBrief.isEmpty || isPublic) ? "" : "该角色的秘密（只有你和这位玩家知道）：\(ch.secretBrief)",
             isPublic ? "" : "该角色已解锁的剧本：\n\(book)",
             !held.isEmpty && !isPublic ? "该玩家持有的线索：\n" + held.map { "- \($0.title)：\($0.text)" }.joined(separator: "\n") : "",
             !privSummary.isEmpty && !isPublic ? "【和这位玩家的私聊摘要】\n\(privSummary)" : "",

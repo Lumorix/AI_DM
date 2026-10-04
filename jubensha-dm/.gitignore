@@ -17,11 +17,20 @@ venv/
 .ruff_cache/
 data/LocalTTS/.venv/
 data/LocalTTS/hf-cache/
+# 独立变声环境（名称不匹配通用 venv/ 规则）
+/data/LocalTTS/seedvc-venv/
 __pycache__/
 *.pyc
+*.pyo
+.tox/
+.nox/
+.coverage
+.coverage.*
+htmlcov/
 
 # 本机配置与运行数据（已有受控文件需另行审查，不会自动移除）
 /config.yaml
+/tools/windows_voice/voice_config.local.json
 .env
 .env.*
 !.env.example
@@ -36,6 +45,13 @@ data/LocalTTS/models/
 *.ckpt
 *.pth
 *.pt
+# 其他本地模型格式（只限定 LocalTTS，不影响应用资源）
+/data/LocalTTS/**/*.bin
+/data/LocalTTS/**/*.onnx
+/data/LocalTTS/**/*.gguf
+/data/LocalTTS/**/*.h5
+# 本地下载的 Seed-VC 模型；已跟踪文件不因本规则自动移除
+/data/LocalTTS/seed-vc/campplus_cn_common.bin
 
 # 有版权的剧本原件、第三方素材
 *.pdf
@@ -53,6 +69,8 @@ AI_voice_training/
 **/cache/
 **/temp/
 **/tmp/
+# 新生成的评测音频；保留评测文本/配置及当前已跟踪音频
+/data/LocalTTS/voices/*/eval/**/*.wav
 
 # 临时文件
 *.log

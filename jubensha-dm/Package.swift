@@ -15,5 +15,11 @@ let package = Package(
             exclude: [],
             swiftSettings: [.swiftLanguageMode(.v5)]
         ),
+        .testTarget(
+            name: "AIDMTests",
+            dependencies: ["AIDM"],
+            path: "tests/AIDMTests",
+            swiftSettings: [.swiftLanguageMode(.v5)]
+        ),
     ]
 )

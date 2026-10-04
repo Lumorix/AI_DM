@@ -70,18 +70,25 @@
       <div class="clues" id="clues"></div>
     </div>
     <div class="controls">
+      <select id="voiceMode" aria-label="朗读声音"><option value="browser">浏览器声音</option><option value="local">八千代（本机实验）</option></select>
       <button class="btn small" id="ttsBtn">🔇 语音朗读：关</button>
+      <button class="btn small" id="ttsStopBtn">停止本段</button>
+      <button class="btn small" id="ttsSkipBtn">跳过当前句</button>
       <button class="btn small" id="qrBtn">隐藏二维码</button>
       <button class="btn small" id="fsBtn">全屏</button>
     </div>
+    <div id="voiceStatus" class="muted" role="status"></div>
   </div>
 </div>
 <script src="/static/common.js"></script>
 <script>
-let V = null, streaming = null, qrHidden = false;
+let V = null, streaming = null, qrHidden = false, mutedStream = null;
 startTimer($("#timer"), () => V && V.phase);
 
 function render(v, ev) {
+  if (V && (V.phase.index !== v.phase.index || V.phase.started_at !== v.phase.started_at)) {
+    TTS.stop(); streaming = null; mutedStream = null;
+  }
   V = v;
   $("#title").textContent = "《" + v.title + "》";
   $("#phase").textContent = v.phase.title;
@@ -129,14 +136,16 @@ connect({ role: "screen" }, {
   view: render,
   event(ev) {
     if (ev.type === "stream_start") {
-      streaming = ev.id; TTS.stop();
+      streaming = ev.id; mutedStream = null; TTS.stop();
       $("#stageBody").textContent = ""; $("#stageBody").classList.add("streaming");
     } else if (ev.type === "stream_delta" && ev.id === streaming) {
-      $("#stageBody").textContent += ev.text; TTS.feed(ev.text);
+      $("#stageBody").textContent += ev.text;
+      if (mutedStream !== ev.id) TTS.feed(ev.text);
       const st = $("#stage"); st.scrollTop = st.scrollHeight;
     } else if (ev.type === "stream_end" && ev.id === streaming) {
       streaming = null; $("#stageBody").classList.remove("streaming");
-      if (ev.cancelled) TTS.stop(); else TTS.flush();
+      if (ev.cancelled || mutedStream === ev.id) TTS.stop(); else TTS.flush();
+      mutedStream = null;
     } else if (ev.type === "speak") {
       $("#stageBody").textContent = ev.text; TTS.say(ev.text);
     }
@@ -145,12 +154,27 @@ connect({ role: "screen" }, {
 
 const ttsOk = TTS.init();
 $("#ttsBtn").onclick = () => {
-  if (!ttsOk) return toast("这个浏览器不支持语音朗读，换 Chrome 或 Edge 试试");
+  if (!ttsOk && TTS.mode === 'browser') return toast("这个浏览器不支持语音朗读，换 Chrome 或 Edge 试试");
   TTS.on = !TTS.on;
   if (!TTS.on) TTS.stop(); else TTS.say("语音已开启");
   $("#ttsBtn").textContent = TTS.on ? "🔊 语音朗读：开" : "🔇 语音朗读：关";
 };
 $("#qrBtn").onclick = () => { qrHidden = !qrHidden; $("#qrBtn").textContent = qrHidden ? "显示二维码" : "隐藏二维码"; V && render(V); };
+$("#ttsStopBtn").onclick = () => { mutedStream = streaming; TTS.stop(); };
+$("#ttsSkipBtn").onclick = () => TTS.skip();
+$("#voiceMode").onchange = async (event) => {
+  TTS.stop(); TTS.mode = event.target.value;
+  if (TTS.mode === 'local') {
+    TTS.status('检查本机语音服务…');
+    try {
+      const r = await fetch('/api/voice/health');
+      const result = await r.json();
+      if (TTS.mode !== 'local') return;
+      TTS.status(r.ok ? '八千代实验音色：中文发音尚不稳定' : (result.error?.message || '模型尚未就绪'));
+    } catch (_) { if (TTS.mode === 'local') TTS.status('无法连接本机语音服务'); }
+  }
+};
+window.addEventListener("pagehide", () => TTS.stop());
 $("#fsBtn").onclick = () => document.fullscreenElement ? document.exitFullscreen() : document.documentElement.requestFullscreen();
 </script>
 </body>

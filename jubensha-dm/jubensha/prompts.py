@@ -3,7 +3,7 @@
 上下文结构（解决10小时上下文不够的核心）：
   [system] 固定部分：身份 + 规则 + 真相 + 角色一览     ← 整局不变，云端API可命中前缀缓存
   [user]   变动部分：当前阶段 + 线索状态 + 公开摘要 + 最近事件 + 该玩家私聊摘要 + 问题
-每次调用都重新拼装，长度基本恒定，不会随游戏时长增长。
+每次调用重新拼装，历史按窗口/摘要控制增长；发送前另有预算检查，超限不静默裁剪。
 """
 from __future__ import annotations
 
@@ -47,14 +47,15 @@ def static_system(script: Script, task: str, include_truth: bool = True) -> str:
 
 
 def memory_block(state: GameState, recent: int) -> str:
+    # Keep all pending events until summarized; the request guard enforces the budget.
     unsummarized = state.public_log[state.summarized_upto:]
     return (f"【之前发生的事（摘要）】\n{state.summary or '（游戏刚开始）'}\n\n"
-            f"【最近的公开事件】\n{_fmt_log(unsummarized[-recent:])}")
+            f"【最近的公开事件】\n{_fmt_log(unsummarized)}")
 
 
-def phase_block(script: Script, state: GameState, phase: Phase) -> str:
+def phase_block(script: Script, state: GameState, phase: Phase, include_notes: bool = True) -> str:
     lines = [f"【当前阶段】第{state.phase_index + 1}/{len(script.phases)}阶段：{phase.title}（类型：{phase.type}）"]
-    if phase.dm_notes:
+    if include_notes and phase.dm_notes:
         lines.append(f"本阶段主持提示：{phase.dm_notes}")
     if state.public_clues:
         lines.append("已公开的线索：\n" + "\n".join(
@@ -74,13 +75,13 @@ def ask_messages(script: Script, state: GameState, phase: Phase, char_id: str, q
                  if c in script.clues and c not in player.clues and c not in state.public_clues]
 
     priv = state.private_log.get(char_id, [])
-    priv_recent = priv[state.private_summarized_upto.get(char_id, 0):][-private_keep:]
+    priv_recent = priv[state.private_summarized_upto.get(char_id, 0):]
 
     dyn = [
         phase_block(script, state, phase),
         memory_block(state, recent),
         f"【提问的玩家】{player.name} 扮演 {ch.name}",
-        f"该角色的秘密（只有你和这位玩家知道）：{ch.secret_brief}" if ch.secret_brief else "",
+        f"该角色的秘密（只有你和这位玩家知道）：{ch.secret_brief}" if ch.secret_brief and not public else "",
         f"该角色已解锁的剧本：\n{book}" if not public else "",
         ("该玩家持有的线索：\n" + "\n".join(f"- {c.title}：{c.text}" for c in held)) if held and not public else "",
         f"【和这位玩家的私聊摘要】\n{state.private_summary.get(char_id, '')}" if state.private_summary.get(char_id) and not public else "",
@@ -101,8 +102,8 @@ def ask_messages(script: Script, state: GameState, phase: Phase, char_id: str, q
 
 # ---------------- 旁白 ----------------
 def narration_messages(script: Script, state: GameState, phase: Phase, text: str) -> list[dict]:
-    # 旁白不需要真相，不给就不会说漏
-    user = (f"{phase_block(script, state, phase)}\n\n"
+    # 旁白不附真相和主持秘密提示；输出仍需经过禁用词检查
+    user = (f"{phase_block(script, state, phase, include_notes=False)}\n\n"
             f"【之前发生的事（摘要）】\n{state.summary or '（游戏刚开始）'}\n\n"
             "请用主持人的口吻，把下面这段主持词讲给玩家听。可以润色语气、加一点氛围，"
             "但不能增加或删减任何信息，不能透露线索和真相，长度不超过原文的1.5倍。只输出要说的话。\n"
