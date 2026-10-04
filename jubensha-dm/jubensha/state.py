@@ -59,6 +59,15 @@ class GameState:
     @classmethod
     def load(cls, path: Path) -> "GameState":
         d = json.loads(path.read_text(encoding="utf-8"))
+        if not isinstance(d, dict):
+            raise ValueError("存档顶层必须是对象")
+        for key in ("players", "private_log", "private_summary", "private_summarized_upto"):
+            if key in d and not isinstance(d[key], dict):
+                raise ValueError(f"存档 {key} 必须是对象")
+        if "public_log" in d and not isinstance(d["public_log"], list):
+            raise ValueError("存档 public_log 必须是列表")
+        if any(not isinstance(entries, list) for entries in d.get("private_log", {}).values()):
+            raise ValueError("存档私聊记录必须是列表")
         d["players"] = {k: Player(**v) for k, v in d.get("players", {}).items()}
         d["public_log"] = [LogEntry(**e) for e in d.get("public_log", [])]
         d["private_log"] = {k: [LogEntry(**e) for e in v] for k, v in d.get("private_log", {}).items()}

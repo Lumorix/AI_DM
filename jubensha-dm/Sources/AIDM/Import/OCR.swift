@@ -4,6 +4,7 @@ import AppKit
 import Foundation
 import PDFKit
 import Vision
+import CryptoKit
 
 enum OCREngine: String, CaseIterable, Identifiable, Codable {
     case apple, vision
@@ -151,6 +152,40 @@ enum OCR {
         return out.joined(separator: "\n")
     }
 
+    static func cacheIdentity(_ url: URL, options: OCROptions, llm: LLM?) throws -> String {
+        let files: [URL]
+        if url.hasDirectoryPath {
+            files = try FileManager.default.contentsOfDirectory(at: url, includingPropertiesForKeys: nil)
+                .filter { imageExts.contains($0.pathExtension.lowercased()) }
+                .sorted { $0.lastPathComponent.localizedStandardCompare($1.lastPathComponent) == .orderedAscending }
+        } else { files = [url] }
+        var sources: [[String: String]] = []
+        for file in files {
+            let handle = try FileHandle(forReadingFrom: file)
+            defer { try? handle.close() }
+            var hash = SHA256()
+            while let chunk = try handle.read(upToCount: 1024 * 1024), !chunk.isEmpty { hash.update(data: chunk) }
+            sources.append(["name": file.lastPathComponent, "sha256": hash.finalize().map { String(format: "%02x", $0) }.joined()])
+        }
+        var identity: [String: Any] = ["version": 1, "source": sources, "engine": options.engine.rawValue,
+                                       "dpi": Double(options.dpi), "split": options.split,
+                                       "os": ProcessInfo.processInfo.operatingSystemVersionString]
+        if options.engine == .vision, let llm {
+            let encoder = JSONEncoder()
+            encoder.outputFormatting = [.sortedKeys]
+            identity["modelConfig"] = String(decoding: try encoder.encode(llm.config), as: UTF8.self)
+            identity["prompt"] = visionPrompt
+        }
+        let data = try JSONSerialization.data(withJSONObject: identity, options: [.sortedKeys])
+        return SHA256.hash(data: data).map { String(format: "%02x", $0) }.joined()
+    }
+
+    static func cachedPage(_ url: URL) -> String? {
+        guard let text = try? String(contentsOf: url, encoding: .utf8),
+              !text.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty else { return nil }
+        return text
+    }
+
     // MARK: 整本识别（带缓存）
 
     struct Progress {
@@ -161,11 +196,13 @@ enum OCR {
         var warning: String?
     }
 
-    /// 返回整本文字（带 === 第N页 === 标记），并写到 Paths.ocr/<名字>.txt
+    /// 返回整本文字（带 === 第N页 === 标记），并写到 Paths.ocr/<名字>-<指纹>.txt，旧结果保留
     static func run(_ url: URL, options: OCROptions, llm: LLM?, concurrency: Int = 4,
                     progress: @escaping @Sendable (Progress) -> Void) async throws -> URL {
         let stem = url.hasDirectoryPath ? url.lastPathComponent : url.deletingPathExtension().lastPathComponent
-        let pageDir = Paths.ocr.appendingPathComponent(stem, isDirectory: true)
+        let identity = try cacheIdentity(url, options: options, llm: llm)
+        let outputName = stem + "-" + identity
+        let pageDir = Paths.ocr.appendingPathComponent(outputName, isDirectory: true)
         try FileManager.default.createDirectory(at: pageDir, withIntermediateDirectories: true)
         let total = pageCount(url)
         guard total > 0 else { throw LLMError(message: "打不开或没有页面：\(url.lastPathComponent)") }
@@ -182,14 +219,16 @@ enum OCR {
                     try Task.checkCancellation()
                     var chars = 0
                     var failed = false
-                    let missing = suffixes.filter { !FileManager.default.fileExists(atPath: cacheFile(i, $0).path) }
+                    let missing = suffixes.filter { cachedPage(cacheFile(i, $0)) == nil }
                     if !missing.isEmpty {
                         if let img = render(url, page: i, dpi: options.dpi) {
                             let parts = options.split ? halves(img) : [img]
                             for (j, part) in parts.enumerated() where missing.contains(suffixes[j]) {
                                 do {
                                     let t = options.engine == .vision ? try await recognize(part, with: llm!) : try recognize(part)
-                                    try t.write(to: cacheFile(i, suffixes[j]), atomically: true, encoding: .utf8)
+                                    if !t.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty {
+                                        try t.write(to: cacheFile(i, suffixes[j]), atomically: true, encoding: .utf8)
+                                    }
                                 } catch is CancellationError {
                                     throw CancellationError()
                                 } catch {
@@ -218,7 +257,7 @@ enum OCR {
             let t = suffixes.compactMap { try? String(contentsOf: cacheFile(i, $0), encoding: .utf8) }.joined(separator: "\n")
             parts.append("=== 第\(i + 1)页 ===\n\(t)")
         }
-        let full = Paths.ocr.appendingPathComponent(stem + ".txt")
+        let full = Paths.ocr.appendingPathComponent(outputName + ".txt")
         try parts.joined(separator: "\n\n").write(to: full, atomically: true, encoding: .utf8)
         return full
     }

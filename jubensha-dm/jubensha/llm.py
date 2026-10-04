@@ -14,6 +14,8 @@ from typing import AsyncIterator
 
 import requests
 
+from .stability import DEFAULT_CONTEXT_BUDGET, estimate_context
+
 THINK_RE = re.compile(r"<think>.*?</think>", re.S)
 
 
@@ -57,6 +59,13 @@ class LLM:
         self.timeout = float(cfg.get("timeout", 180))
         self.max_tokens = int(cfg.get("max_tokens", 1500))
         self.extra = cfg.get("extra_body") or {}
+        self.context_budget = int(cfg.get("context_budget", DEFAULT_CONTEXT_BUDGET))
+        if not isinstance(self.extra, dict):
+            raise LLMError("extra_body 必须是 JSON 对象")
+        if set(self.extra) & {"model", "messages", "max_tokens", "max_completion_tokens", "stream"}:
+            raise LLMError("extra_body 不能覆盖模型、消息、输出长度或流式参数")
+        if self.context_budget < 1024 or self.max_tokens <= 0:
+            raise LLMError("上下文预算至少1024，输出长度必须大于0")
         if self.provider != "mock" and (not self.base_url or not self.model):
             raise LLMError("config.yaml 里 llm.base_url 和 llm.model 不能为空（或把 provider 设为 mock 先测试）")
 
@@ -65,7 +74,19 @@ class LLM:
         return "模拟模式（未接AI）" if self.provider == "mock" else f"{self.model} @ {self.base_url}"
 
     # ---------------- 底层 HTTP ----------------
+    def _check_budget(self, messages, max_tokens):
+        output = self.max_tokens if max_tokens is None else max_tokens
+        try:
+            if output <= 0:
+                raise ValueError("输出长度必须大于0")
+            cost = estimate_context(messages, output) + len(json.dumps(self.extra, ensure_ascii=False).encode('utf-8'))
+            if cost > self.context_budget:
+                raise ValueError(f"上下文估算 {cost} 超过预算 {self.context_budget}，请求未发送；请缩小剧本/历史，或按模型容量调整 context_budget")
+        except (ValueError, TypeError, AttributeError) as exc:
+            raise LLMError(str(exc)) from exc
+
     def _payload(self, messages: list[dict], stream: bool, max_tokens: int | None) -> dict:
+        self._check_budget(messages, max_tokens)
         p = {"model": self.model, "messages": messages, "temperature": self.temperature,
              "max_tokens": max_tokens or self.max_tokens, "stream": stream}
         p.update(self.extra)
@@ -111,6 +132,7 @@ class LLM:
 
     # ---------------- 对外接口 ----------------
     async def chat(self, messages: list[dict], max_tokens: int | None = None) -> str:
+        self._check_budget(messages, max_tokens)
         if self.provider == "mock":
             return _mock_reply(messages)
         text = await asyncio.to_thread(self._chat_sync, messages, max_tokens)
@@ -118,6 +140,7 @@ class LLM:
 
     async def stream(self, messages: list[dict], max_tokens: int | None = None) -> AsyncIterator[str]:
         """逐段产出文字；自动吞掉 <think> 部分。"""
+        self._check_budget(messages, max_tokens)
         if self.provider == "mock":
             for i in range(0, len(text := _mock_reply(messages)), 6):
                 await asyncio.sleep(0.02)

@@ -107,6 +107,9 @@ struct LLMFields: View {
                 }
                 Stepper("超时：\(Int(config.timeout)) 秒", value: $config.timeout, in: 30...1200, step: 30)
                 Stepper("单次最多输出：\(config.maxTokens) tokens", value: $config.maxTokens, in: 200...8000, step: 100)
+                TextField("上下文估算预算", value: Binding(get: { config.contextBudget ?? Stability.defaultContextBudget }, set: { config.contextBudget = $0 }), format: .number)
+                Text("按输入 UTF-8 字节保守估算，并预留输出空间；超限不发送，不自动裁掉剧本。图片开销仅为估计。")
+                    .font(.caption).foregroundStyle(.secondary)
                 TextField("附加参数（JSON）", text: $config.extraBody, prompt: Text("{\"enable_thinking\": false}"))
                     .font(.system(.body, design: .monospaced))
             } header: {

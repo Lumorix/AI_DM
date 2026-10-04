@@ -118,7 +118,7 @@ struct Script: Equatable {
 
     /// 从第几个阶段开始可以说出真相（禁用词不再拦截）
     var spoilerPhaseIndex: Int {
-        if let f = forbiddenUntil, let i = phases.firstIndex(where: { $0.id == f }) { return i }
+        if let f = forbiddenUntil { return phases.firstIndex(where: { $0.id == f }) ?? phases.count }
         return phases.firstIndex { $0.type == .reveal } ?? phases.count
     }
 
@@ -128,11 +128,25 @@ struct Script: Equatable {
     func forbiddenRules() -> [(text: String, until: Int)] {
         forbidden.compactMap { f in
             if let at = f.lastIndex(of: "@") {
-                let pid = String(f[f.index(after: at)...])
-                if let i = phases.firstIndex(where: { $0.id == pid }) { return (String(f[..<at]), i) }
+                let pid = String(f[f.index(after: at)...]).trimmingCharacters(in: .whitespacesAndNewlines)
+                let word = String(f[..<at]).trimmingCharacters(in: .whitespacesAndNewlines)
+                return word.isEmpty ? nil : (word, phases.firstIndex(where: { $0.id == pid }) ?? phases.count)
             }
             return f.isEmpty ? nil : (f, spoilerPhaseIndex)
         }
+    }
+
+    func firstForbidden(_ text: String, phaseIndex: Int, exemptName: String? = nil) -> String? {
+        func normalize(_ value: String) -> String {
+            value.replacingOccurrences(of: "[\\s，。,.！!？?：:“”\"'‘’、]", with: "", options: .regularExpression)
+        }
+        let normalized = normalize(text)
+        for (word, until) in forbiddenRules() where phaseIndex < until {
+            if let name = exemptName, word.contains(name) { continue }
+            let key = normalize(word)
+            if !key.isEmpty && normalized.contains(key) { return word }
+        }
+        return nil
     }
 
     func unlockedActs(upTo phaseIndex: Int) -> [String] {
@@ -327,10 +341,14 @@ enum ScriptIO {
                 W("线索 \(c.id) 的图片不存在：\(img)")
             }
         }
-        if let f = s.forbiddenUntil, !pids.contains(f) { W("dm.forbidden_until 指向的阶段 '\(f)' 不存在") }
+        if let f = s.forbiddenUntil, !pids.contains(f) { W("dm.forbidden_until 指向的阶段 '\(f)' 不存在；禁用词保持锁定") }
         for f in s.forbidden {
-            if let at = f.lastIndex(of: "@"), !pids.contains(String(f[f.index(after: at)...])) {
-                W("禁用词「\(f)」@ 后面的阶段 id 不存在")
+            if let at = f.lastIndex(of: "@") {
+                let word = String(f[..<at]).trimmingCharacters(in: .whitespacesAndNewlines)
+                let target = String(f[f.index(after: at)...]).trimmingCharacters(in: .whitespacesAndNewlines)
+                if word.isEmpty || !pids.contains(target) {
+                    E("无效禁用词规则「\(f)」：需要非空文本和有效阶段 id")
+                }
             }
         }
         if !s.phases.contains(where: { $0.type == .reveal }) && s.forbiddenUntil == nil && s.forbidden.contains(where: { !$0.contains("@") }) {

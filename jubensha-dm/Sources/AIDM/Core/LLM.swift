@@ -25,6 +25,7 @@ struct LLMConfig: Codable, Equatable {
     var temperature = 0.7
     var timeout = 180.0
     var maxTokens = 1500
+    var contextBudget: Int? = nil // nil keeps older saved settings compatible; default 32768
     var extraBody = ""           // 可选：附加到请求里的 JSON，例如 {"enable_thinking": false}
 
     enum Provider: String, Codable { case mock, openai }
@@ -58,7 +59,14 @@ func parseJSONReply(_ raw: String) -> [String: Any] {
     return ["reply": text]
 }
 
-final class LLM: @unchecked Sendable {
+/// 游戏仅依赖此接口；测试可控制回答完成时机，无需访问真实模型。
+protocol GameLanguageModel: Sendable {
+    var label: String { get }
+    func chat(_ messages: [ChatMessage], maxTokens: Int?) async throws -> String
+    func stream(_ messages: [ChatMessage], maxTokens: Int?) -> AsyncThrowingStream<String, Error>
+}
+
+final class LLM: GameLanguageModel, @unchecked Sendable {
     let config: LLMConfig
     let apiKey: String
 
@@ -88,8 +96,17 @@ final class LLM: @unchecked Sendable {
                   let extra = try? JSONSerialization.jsonObject(with: d) as? [String: Any] else {
                 throw LLMError(message: "附加参数不是合法的 JSON 对象")
             }
+            let reserved: Set<String> = ["model", "messages", "max_tokens", "max_completion_tokens", "stream"]
+            guard reserved.isDisjoint(with: Set(extra.keys)) else {
+                throw LLMError(message: "附加参数不能覆盖模型、消息、输出长度或流式参数")
+            }
+            let overhead = try JSONSerialization.data(withJSONObject: extra).count
+            try Stability.check(messages, outputTokens: maxTokens ?? config.maxTokens,
+                                budget: (config.contextBudget ?? Stability.defaultContextBudget) - overhead)
             payload.merge(extra) { _, new in new }
         }
+        try Stability.check(messages, outputTokens: maxTokens ?? config.maxTokens,
+                            budget: config.contextBudget ?? Stability.defaultContextBudget)
         var r = URLRequest(url: url, timeoutInterval: config.timeout)
         r.httpMethod = "POST"
         r.setValue("Bearer \(apiKey)", forHTTPHeaderField: "Authorization")
@@ -105,7 +122,10 @@ final class LLM: @unchecked Sendable {
     // MARK: 对外接口
 
     func chat(_ messages: [ChatMessage], maxTokens: Int? = nil) async throws -> String {
-        if isMock { return mockReply(messages) }
+        if isMock {
+            try Stability.check(messages, outputTokens: maxTokens ?? config.maxTokens, budget: config.contextBudget ?? Stability.defaultContextBudget)
+            return mockReply(messages)
+        }
         let req = try request(messages, stream: false, maxTokens: maxTokens)
         let data: Data, resp: URLResponse
         do { (data, resp) = try await URLSession.shared.data(for: req) } catch is CancellationError {
@@ -128,6 +148,7 @@ final class LLM: @unchecked Sendable {
             let task = Task {
                 do {
                     if isMock {
+                        try Stability.check(messages, outputTokens: maxTokens ?? config.maxTokens, budget: config.contextBudget ?? Stability.defaultContextBudget)
                         let text = mockReply(messages)
                         var i = text.startIndex
                         while i < text.endIndex {

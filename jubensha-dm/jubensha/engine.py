@@ -12,6 +12,7 @@ from . import prompts
 from .llm import LLM, LLMError, parse_json_reply
 from .script import Script
 from .state import GameState, Player
+from .stability import validated_summary
 
 
 # ---------------- 事件推送 ----------------
@@ -42,10 +43,6 @@ class Bus:
         for s in self.subs:
             if audiences is None or s.audience in audiences:
                 s.queue.put_nowait(event)
-
-
-def _norm(t: str) -> str:
-    return re.sub(r"[\s，。,.！!？?：:“”\"'‘’、]", "", t)
 
 
 class Game:
@@ -84,16 +81,8 @@ class Game:
 
     def leaks(self, text: str, exempt_char: str | None = None) -> str | None:
         """复盘前检查是否出现禁用词。私聊给角色本人时，涉及本人名字的禁用词不算（凶手本人知道自己是凶手）。"""
-        if self.phase.type == "reveal":
-            return None
-        exempt_name = self.script.character(exempt_char).name if exempt_char and self.script.character(exempt_char) else None
-        nt = _norm(text)
-        for f in self.script.forbidden:
-            if exempt_name and exempt_name in f:
-                continue
-            if _norm(f) and _norm(f) in nt:
-                return f
-        return None
+        ch = self.script.character(exempt_char) if exempt_char else None
+        return self.script.first_forbidden(text, self.state.phase_index, ch.name if ch else None)
 
     # ---------------- 玩家加入 ----------------
     async def join(self, char_id: str, name: str, token: str | None = None) -> Player:
@@ -165,33 +154,39 @@ class Game:
             self._narr_task = asyncio.create_task(self._narrate(ph.dm_script))
 
     async def _stream_public(self, messages: list[dict] | None, fallback: str, kind: str = "narration") -> str:
-        """把一段话流式推到大屏和所有手机上，结束后写入公开记录。"""
+        """完整生成并检查后才公开；取消或换阶段时丢弃未审核文本。"""
         sid = secrets.token_hex(4)
         phase_id = self.phase.id
+        snapshot = (self.state.phase_index, self.state.phase_started_at)
         self.bus.send({"type": "stream_start", "id": sid, "who": "DM", "kind": kind})
         text = ""
         try:
             if messages is None or self.state.ai_paused:
-                raise LLMError("verbatim")
-            async for delta in self.llm.stream(messages, max_tokens=2500):
-                text += delta
-                self.bus.send({"type": "stream_delta", "id": sid, "text": delta})
+                text = fallback
+            else:
+                async for delta in self.llm.stream(messages, max_tokens=2500):
+                    text += delta
         except asyncio.CancelledError:
             self.bus.send({"type": "stream_end", "id": sid, "cancelled": True})
-            if text:
-                self.state.log_public(kind, "DM", text + "……", phase_id)
-                self.changed()
             raise
-        except LLMError as e:
-            if str(e) != "verbatim":
-                self.state.warn(f"AI旁白失败，改为直接念原文：{e}")
-            if not text:
-                text = fallback
-                self.bus.send({"type": "stream_delta", "id": sid, "text": fallback})
+        except LLMError:
+            self.state.warn("AI旁白生成失败，改为检查原文后播出")
+            text = fallback  # Never publish partial model output after failure.
+        if snapshot != (self.state.phase_index, self.state.phase_started_at):
+            self.bus.send({"type": "stream_end", "id": sid, "cancelled": True})
+            return ""
+        if not text.strip():
+            text = fallback
+        if self.leaks(text):
+            self.state.warn("旁白命中当前阶段禁用词，已在公开前拦截")
+            text = fallback
+        if self.leaks(text):
+            self.state.warn("原文旁白也命中禁用词，本段未播出，请主持人检查")
+            text = ""
+        if text:
+            self.bus.send({"type": "stream_delta", "id": sid, "text": text})
+            self.state.log_public(kind, "DM", text, phase_id)
         self.bus.send({"type": "stream_end", "id": sid})
-        if leak := self.leaks(text):
-            self.state.warn(f"旁白里出现了禁用词「{leak}」，请检查剧本或改用原文念白（game.narration: verbatim）")
-        self.state.log_public(kind, "DM", text, phase_id)
         self.changed()
         return text
 
@@ -417,7 +412,7 @@ class Game:
 
     # ---------------- 记忆压缩 ----------------
     async def maybe_summarize(self, force: bool = False, char_id: str | None = None) -> None:
-        """公开记录超过阈值，就把最早的一批折叠进摘要；私聊同理。保证每次给AI的上下文长度恒定。"""
+        """公开记录超过阈值，就把最早的一批折叠进摘要；私聊同理。分批压缩；超限时保留旧摘要和游标。"""
         if self._sum_lock.locked():
             return
         async with self._sum_lock:
@@ -425,23 +420,24 @@ class Game:
             pending = len(st.public_log) - st.summarized_upto
             threshold = self.keep_recent + self.summarize_batch
             if pending > threshold or (force and pending > self.keep_recent):
-                upto = len(st.public_log) - self.keep_recent
+                upto = min(len(st.public_log) - self.keep_recent, st.summarized_upto + max(1, self.summarize_batch))
                 batch = st.public_log[st.summarized_upto:upto]
                 try:
-                    new = await self.cheap.chat(prompts.summary_messages(st.summary, batch), max_tokens=1200)
+                    new = await validated_summary(self.cheap, prompts.summary_messages(st.summary, batch), max_tokens=1200)
                     if new.strip():
                         async with self.lock:
                             st.summary, st.summarized_upto = new.strip(), upto
                             self.changed()
                 except LLMError as e:
                     st.warn(f"记忆压缩失败（不影响游戏，下次再试）：{e}")
+                    self.changed()
             if char_id:
                 log = st.private_log.get(char_id, [])
                 done = st.private_summarized_upto.get(char_id, 0)
                 if len(log) - done > self.private_keep * 2:
-                    upto = len(log) - self.private_keep
+                    upto = min(len(log) - self.private_keep, done + max(1, self.summarize_batch))
                     try:
-                        new = await self.cheap.chat(prompts.summary_messages(
+                        new = await validated_summary(self.cheap, prompts.summary_messages(
                             st.private_summary.get(char_id, ""), log[done:upto], self.name_of(char_id)), max_tokens=800)
                         if new.strip():
                             async with self.lock:
@@ -450,6 +446,7 @@ class Game:
                                 self.changed()
                     except LLMError as e:
                         st.warn(f"私聊记忆压缩失败：{e}")
+                        self.changed()
 
     # ---------------- 视图（每种页面看到的内容不同） ----------------
     def act_label(self, act: str) -> str:

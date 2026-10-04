@@ -45,18 +45,14 @@ struct ActionResult {
     }
 }
 
-private func norm(_ t: String) -> String {
-    t.replacingOccurrences(of: "[\\s，。,.！!？?：:“”\"'‘’、]", with: "", options: .regularExpression)
-}
-
 private struct Verbatim: Error {}
 
 @MainActor @Observable
 final class Game {
     let script: Script
     var state: GameState
-    private(set) var llm: LLM
-    private(set) var cheap: LLM                      // 摘要可以交给便宜/本地模型
+    private(set) var llm: any GameLanguageModel
+    private(set) var cheap: any GameLanguageModel                      // 摘要可以交给便宜/本地模型
     var settings: GameSettings
     let savePath: URL
 
@@ -69,7 +65,7 @@ final class Game {
     @ObservationIgnored weak var speech: SpeechSink?
     @ObservationIgnored private var narrTask: Task<Void, Never>?
 
-    init(script: Script, state: GameState, llm: LLM, cheap: LLM?, settings: GameSettings, savePath: URL) {
+    init(script: Script, state: GameState, llm: any GameLanguageModel, cheap: (any GameLanguageModel)?, settings: GameSettings, savePath: URL) {
         self.script = script
         self.state = state
         self.llm = llm
@@ -78,7 +74,7 @@ final class Game {
         self.savePath = savePath
     }
 
-    func updateModels(llm: LLM, cheap: LLM?) {
+    func updateModels(llm: any GameLanguageModel, cheap: (any GameLanguageModel)?) {
         self.llm = llm
         self.cheap = cheap ?? llm
         changed()
@@ -104,14 +100,7 @@ final class Game {
 
     /// 复盘前检查是否出现禁用词。私聊给角色本人时，涉及本人名字的禁用词不算（凶手本人知道自己是凶手）。
     func leaks(_ text: String, exemptChar: String? = nil) -> String? {
-        let exemptName = script.character(exemptChar)?.name
-        let nt = norm(text)
-        for (f, until) in script.forbiddenRules() where state.phaseIndex < until {
-            if let n = exemptName, f.contains(n) { continue }
-            let nf = norm(f)
-            if !nf.isEmpty && nt.contains(nf) { return f }
-        }
-        return nil
+        script.firstForbidden(text, phaseIndex: state.phaseIndex, exemptName: script.character(exemptChar)?.name)
     }
 
     // MARK: - 玩家加入
@@ -155,6 +144,7 @@ final class Game {
     // MARK: - 阶段推进
 
     func goto(_ index: Int, narrate: Bool = true) {
+        narrTask?.cancel()
         let index = max(0, min(index, script.phases.count - 1))
         let forward = index > state.phaseIndex
         state.phaseIndex = index
@@ -186,42 +176,51 @@ final class Game {
 
     func stopNarration() { narrTask?.cancel() }
 
-    /// 把一段话流式推到大屏和所有手机上，结束后写入公开记录
+    /// 整段生成并检查后才发送、朗读和记录；未审核内容保持私有
     @discardableResult
     private func streamPublic(_ messages: [ChatMessage]?, fallback: String, kind: LogKind = .narration) async -> String {
         let sid = randomHex()
+        let phaseID = phase.id
+        let phaseIndex = state.phaseIndex
+        let phaseStartedAt = state.phaseStartedAt
         bus.send(["type": "stream_start", "id": sid, "who": "DM", "kind": kind.rawValue])
         live = LiveStream(id: sid, kind: kind, text: "")
         speech?.streamStarted()
         var text = ""
-        func emit(_ delta: String) {
-            text += delta
-            bus.send(["type": "stream_delta", "id": sid, "text": delta])
-            if live?.id == sid { live?.text += delta }
-            speech?.streamDelta(delta)
+        func finish(cancelled: Bool) {
+            bus.send(["type": "stream_end", "id": sid, "cancelled": cancelled])
+            if live?.id == sid { live = nil; speech?.streamEnded(cancelled: cancelled) }
         }
         do {
             guard let messages, !state.aiPaused else { throw Verbatim() }
-            for try await delta in llm.stream(messages, maxTokens: 2500) { emit(delta) }
+            for try await delta in llm.stream(messages, maxTokens: 2500) { text += delta }
             try Task.checkCancellation()
         } catch is CancellationError {
-            bus.send(["type": "stream_end", "id": sid, "cancelled": true])
-            if live?.id == sid { live = nil; speech?.streamEnded(cancelled: true) }
-            if !text.isEmpty {
-                state.logPublic(kind, "DM", text + "……", phase: phase.id)
-                changed()
-            }
-            return text
+            finish(cancelled: true)
+            return ""
         } catch {
-            if !(error is Verbatim) { state.warn("AI旁白失败，改为直接念原文：\(error.localizedDescription)") }
-            if text.isEmpty { emit(fallback) }
+            if !(error is Verbatim) { state.warn("AI旁白生成失败，改为检查原文后播出") }
+            text = fallback
         }
-        bus.send(["type": "stream_end", "id": sid])
-        if live?.id == sid { live = nil; speech?.streamEnded(cancelled: false) }
-        if let leak = leaks(text) {
-            state.warn("旁白里出现了禁用词「\(leak)」，请检查剧本或改用原文念白")
+        guard !Task.isCancelled, state.phaseIndex == phaseIndex, state.phaseStartedAt == phaseStartedAt else {
+            finish(cancelled: true)
+            return ""
         }
-        state.logPublic(kind, "DM", text, phase: phase.id)
+        if text.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty { text = fallback }
+        if leaks(text) != nil {
+            state.warn("旁白命中当前阶段禁用词，已在公开前拦截")
+            text = fallback
+        }
+        if leaks(text) != nil {
+            state.warn("原文旁白也命中禁用词，本段未播出，请主持人检查")
+            text = ""
+        }
+        if !text.isEmpty {
+            bus.send(["type": "stream_delta", "id": sid, "text": text])
+            if live?.id == sid { live?.text = text; speech?.streamDelta(text) }
+            state.logPublic(kind, "DM", text, phase: phaseID)
+        }
+        finish(cancelled: false)
         changed()
         return text
     }
@@ -299,11 +298,31 @@ final class Game {
 
     // MARK: - 问答
 
+    private struct AnswerContext {
+        let phaseIndex: Int
+        let phaseStartedAt: Double
+        var token: String? = nil
+    }
+
+    private func answerContextValid(_ context: AnswerContext, charId: String? = nil) -> Bool {
+        guard !Task.isCancelled, state.phaseIndex == context.phaseIndex,
+              state.phaseStartedAt == context.phaseStartedAt else { return false }
+        guard let charId else { return true }
+        guard let player = state.players[charId], !player.claimable else { return false }
+        return player.token == context.token
+    }
+
+    private var staleAnswer: ActionResult {
+        .fail("阶段或角色设备已变更，或请求已取消，请重新提问")
+    }
+
     func ask(charId: String, question raw: String, isPublic: Bool) async -> ActionResult {
         let question = String(raw.trimmingCharacters(in: .whitespacesAndNewlines).prefix(500))
         guard !question.isEmpty else { return .fail("问题是空的") }
         guard !busy.contains(charId) else { return .fail("DM还在回答你上一个问题") }
-        guard state.players[charId] != nil else { return .fail("请先选择角色") }
+        guard let player = state.players[charId], !player.claimable else { return .fail("请先选择角色") }
+        let context = AnswerContext(phaseIndex: state.phaseIndex, phaseStartedAt: state.phaseStartedAt, token: player.token)
+        guard answerContextValid(context, charId: charId) else { return staleAnswer }
         let who = nameOf(charId)
         if isPublic {
             state.logPublic(.ask, who, question, phase: phase.id)
@@ -313,7 +332,7 @@ final class Game {
         changed()
 
         if state.aiPaused {
-            return postAnswer(charId, reply: "DM暂时离开了，请稍后再问，或直接问在场的主持人。", give: nil, isPublic: isPublic)
+            return postAnswer(charId, reply: "DM暂时离开了，请稍后再问，或直接问在场的主持人。", give: nil, isPublic: isPublic, context: context)
         }
 
         busy.insert(charId)
@@ -326,17 +345,21 @@ final class Game {
 
         var reply = "", give: String? = nil
         for attempt in 0..<2 {
-            guard state.players[charId] != nil else { return .fail("请先选择角色") }
+            guard answerContextValid(context, charId: charId) else { return staleAnswer }
             let msgs = Prompts.ask(script, state, phase, charId: charId, question: question, isPublic: isPublic,
                                    recent: settings.keepRecent, privateKeep: settings.privateKeep, strict: attempt > 0)
             let raw: String
             do {
                 raw = try await llm.chat(msgs, maxTokens: 800)
+            } catch is CancellationError {
+                return staleAnswer
             } catch {
+                guard answerContextValid(context, charId: charId) else { return staleAnswer }
                 state.warn("AI回答失败：\(error.localizedDescription)")
                 reply = "（DM这边网络有点问题，请稍后再问一次）"; give = nil
                 break
             }
+            guard answerContextValid(context, charId: charId) else { return staleAnswer }
             let data = parseJSONReply(raw)
             let r = data["reply"].map { $0 is NSNull ? "" : (($0 as? String) ?? "\($0)") } ?? ""
             reply = r.trimmingCharacters(in: .whitespacesAndNewlines)
@@ -352,7 +375,7 @@ final class Game {
                 && !(state.players[charId]?.clues.contains(g) ?? true) && !state.publicClues.contains(g)
             give = ok ? g : nil
         }
-        return postAnswer(charId, reply: reply, give: give, isPublic: isPublic)
+        return postAnswer(charId, reply: reply, give: give, isPublic: isPublic, context: context)
     }
 
     /// 在电脑上直接问 DM（不需要选角色）：问题和回答都公开，DM 用语音念出来
@@ -362,6 +385,8 @@ final class Game {
         let question = String(raw.trimmingCharacters(in: .whitespacesAndNewlines).prefix(500))
         guard !question.isEmpty else { return .fail("问题是空的") }
         guard !tableBusy else { return .fail("DM还在回答上一个问题") }
+        let context = AnswerContext(phaseIndex: state.phaseIndex, phaseStartedAt: state.phaseStartedAt)
+        guard answerContextValid(context) else { return staleAnswer }
         state.logPublic(.ask, "提问", question, phase: phase.id)
         changed()
         if state.aiPaused {
@@ -375,12 +400,18 @@ final class Game {
         defer { tableBusy = false; speech?.thinking(false) }
         var reply = ""
         for attempt in 0..<2 {
+            guard answerContextValid(context) else { return staleAnswer }
             let msgs = Prompts.askTable(script, state, phase, question: question, recent: settings.keepRecent, strict: attempt > 0)
             do {
-                let data = parseJSONReply(try await llm.chat(msgs, maxTokens: 800))
+                let raw = try await llm.chat(msgs, maxTokens: 800)
+                guard answerContextValid(context) else { return staleAnswer }
+                let data = parseJSONReply(raw)
                 reply = (data["reply"].map { ($0 as? String) ?? "\($0)" } ?? "").trimmingCharacters(in: .whitespacesAndNewlines)
                 if reply.isEmpty { reply = "……" }
+            } catch is CancellationError {
+                return staleAnswer
             } catch {
+                guard answerContextValid(context) else { return staleAnswer }
                 state.warn("AI回答失败：\(error.localizedDescription)")
                 reply = "（DM这边网络有点问题，请稍后再问一次）"
                 break
@@ -389,6 +420,7 @@ final class Game {
             state.warn("拦截了一次可能的剧透（当面提问：\(question.prefix(30))；命中「\(leak)」）")
             reply = "这个问题现在还不能回答。继续推理吧。"
         }
+        guard answerContextValid(context) else { return staleAnswer }
         state.logPublic(.answer, "DM", reply, phase: phase.id)
         changed()
         speech?.say(reply)
@@ -396,7 +428,8 @@ final class Game {
         return ActionResult(ok: true, extra: ["reply": reply])
     }
 
-    private func postAnswer(_ charId: String, reply: String, give: String?, isPublic: Bool) -> ActionResult {
+    private func postAnswer(_ charId: String, reply: String, give: String?, isPublic: Bool, context: AnswerContext) -> ActionResult {
+        guard answerContextValid(context, charId: charId) else { return staleAnswer }
         let ph = phase.id
         if isPublic {
             state.logPublic(.answer, "DM", "（回答\(nameOf(charId))）\(reply)", phase: ph)
@@ -405,7 +438,8 @@ final class Game {
             state.logPrivate(charId, .answer, "DM", reply, phase: ph)
         }
         var result = ActionResult(ok: true, extra: ["reply": reply])
-        if let give, let clue = script.clue(give), state.players[charId] != nil {
+        if let give, let clue = script.clue(give), let player = state.players[charId],
+           phase.grantable.contains(give), !player.clues.contains(give), !state.publicClues.contains(give) {
             state.players[charId]?.clues.append(give)
             if state.foundBy[give] == nil { state.foundBy[give] = charId }
             state.logPrivate(charId, .clue, "DM", "你获得了线索【\(clue.title)】：\(clue.text)", phase: ph)
@@ -512,7 +546,7 @@ final class Game {
 
     // MARK: - 记忆压缩
 
-    /// 公开记录超过阈值，就把最早的一批折叠进摘要；私聊同理。保证每次给AI的上下文长度恒定。
+    /// 公开记录超过阈值，就把最早的一批折叠进摘要；私聊同理。分批压缩；不合格时保留旧摘要与游标。
     func maybeSummarize(force: Bool = false, charId: String? = nil) async {
         guard !summarizing else { return }
         summarizing = true
@@ -520,10 +554,10 @@ final class Game {
         let pending = state.publicLog.count - state.summarizedUpto
         let threshold = settings.keepRecent + settings.summarizeBatch
         if pending > threshold || (force && pending > settings.keepRecent) {
-            let upto = state.publicLog.count - settings.keepRecent
+            let upto = min(state.publicLog.count - settings.keepRecent, state.summarizedUpto + max(1, settings.summarizeBatch))
             let batch = Array(state.publicLog[state.summarizedUpto..<upto])
             do {
-                let new = try await cheap.chat(Prompts.summary(old: state.summary, entries: batch), maxTokens: 1200)
+                let new = try await Stability.summary(cheap, messages: Prompts.summary(old: state.summary, entries: batch), maxTokens: 1200)
                     .trimmingCharacters(in: .whitespacesAndNewlines)
                 if !new.isEmpty {
                     state.summary = new
@@ -532,15 +566,16 @@ final class Game {
                 }
             } catch {
                 state.warn("记忆压缩失败（不影响游戏，下次再试）：\(error.localizedDescription)")
+                changed()
             }
         }
         if let charId {
             let log = state.privateLog[charId] ?? []
             let done = state.privateSummarizedUpto[charId] ?? 0
             if log.count - done > settings.privateKeep * 2 {
-                let upto = log.count - settings.privateKeep
+                let upto = min(log.count - settings.privateKeep, done + max(1, settings.summarizeBatch))
                 do {
-                    let new = try await cheap.chat(Prompts.summary(old: state.privateSummary[charId] ?? "",
+                    let new = try await Stability.summary(cheap, messages: Prompts.summary(old: state.privateSummary[charId] ?? "",
                                                                    entries: Array(log[done..<upto]), privateOf: nameOf(charId)),
                                                    maxTokens: 800).trimmingCharacters(in: .whitespacesAndNewlines)
                     if !new.isEmpty {
@@ -550,6 +585,7 @@ final class Game {
                     }
                 } catch {
                     state.warn("私聊记忆压缩失败：\(error.localizedDescription)")
+                    changed()
                 }
             }
         }

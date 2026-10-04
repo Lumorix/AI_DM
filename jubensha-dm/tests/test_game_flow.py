@@ -80,8 +80,7 @@ class GameFlowTests(unittest.IsolatedAsyncioTestCase):
         with self.assertRaises(asyncio.CancelledError):
             await task
         entries=[e for e in g.state.public_log if e.kind=='narration']
-        self.assertEqual(entries[-1].phase,origin)
-        self.assertNotIn('旧阶段结尾',entries[-1].text)
+        self.assertEqual(entries, [])  # Cancelled unreviewed output is never public.
 
     async def _pending_question(self):
         g=self.game;p=await g.join(g.script.characters[0].id,'test')

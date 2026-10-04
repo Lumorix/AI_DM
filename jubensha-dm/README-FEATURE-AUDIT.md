@@ -1,5 +1,9 @@
 # README 功能与实现核对
 
+> 更新补记：随后已加入上下文预算检查、摘要长度验证与 OCR 内容/参数指纹，详见 STABILITY.md；下方保留原审计。
+
+> 修复前快照：本报告之后已实施旁白播出前检查、Python 排除 dm_notes、两版公开提问排除个人秘密摘要、Python 阶段禁用规则及开局检查。最新行为见根 README 与 SPOILER-PROTECTION.md；下方原始审计保留用于追踪问题。
+
 检查日期：2026-10-04。对象：`C:\Users\crazy\OneDrive\Desktop\AI_DM`，本地 `Harry`，HEAD `a37e9dd`，包含当前未提交工作。以根目录 README 的全部功能描述为主，并核对 Windows 语音 README。不是远端 GitHub 状态报告。
 
 本次进行了源码、配置及文档核对，没有重新跑 GPU 训练、外部付费服务或 Mac 应用。此前 Windows 44 项自动化测试通过的结果作为已有验证记录引用，不能替代真实多人、声卡、长局和 Mac 验收。未删除素材、修改运行配置、提交或推送。
