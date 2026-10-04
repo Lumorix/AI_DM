@@ -68,7 +68,7 @@ class GameState:
     def player_by_token(self, token: str | None) -> Player | None:
         if not token:
             return None
-        return next((p for p in self.players.values() if p.token == token), None)
+        return next((p for p in self.players.values() if p.token == token and not p.claimable), None)
 
     def log_public(self, kind: str, who: str, text: str, phase: str = "") -> LogEntry:
         e = LogEntry(time.time(), kind, who, text, phase)

@@ -33,7 +33,8 @@ def create_app(game: Game, lan_url: str = "") -> Starlette:
 
     async def body(request: Request) -> dict:
         try:
-            return await request.json()
+            data = await request.json()
+            return data if isinstance(data, dict) else {}
         except (json.JSONDecodeError, ValueError):
             return {}
 
@@ -50,6 +51,12 @@ def create_app(game: Game, lan_url: str = "") -> Starlette:
     # ---------- 实时推送 ----------
     async def events(request: Request):
         role = request.query_params.get("role", "screen")
+        session_token = request.query_params.get("token")
+        def session_valid():
+            if role != "player":
+                return True
+            player = st.player_by_token(session_token)
+            return player is not None and audience == f"player:{player.char_id}"
         if role == "admin":
             if not is_admin(request):
                 return err("管理密码不对", 403)
@@ -66,27 +73,26 @@ def create_app(game: Game, lan_url: str = "") -> Starlette:
 
         async def gen():
             try:
+                if not session_valid():
+                    yield 'data: {"type": "kicked"}\n\n'
+                    return
                 yield f"data: {json.dumps({'type': 'view', 'data': view(), 'lan_url': lan_url}, ensure_ascii=False)}\n\n"
                 while True:
                     try:
                         ev = await asyncio.wait_for(sub.queue.get(), timeout=15)
                     except asyncio.TimeoutError:
+                        if not session_valid():
+                            yield 'data: {"type": "kicked"}\n\n'
+                            break
                         if await request.is_disconnected():
                             break
                         yield ": ping\n\n"
                         continue
+                    # Bind every event to the authenticated device, not only its character.
+                    if not session_valid():
+                        yield 'data: {"type": "kicked"}\n\n'
+                        break
                     if ev["type"] == "refresh":
-                        # 合并连续的刷新，避免刷屏
-                        while not sub.queue.empty():
-                            nxt = sub.queue.get_nowait()
-                            if nxt["type"] != "refresh":
-                                yield f"data: {json.dumps(nxt, ensure_ascii=False)}\n\n"
-                        if audience.startswith("player:") and audience[7:] not in st.players:
-                            yield f"data: {json.dumps({'type': 'kicked'})}\n\n"
-                            break
-                        if audience.startswith("player:") and st.players[audience[7:]].claimable:
-                            yield f"data: {json.dumps({'type': 'kicked'})}\n\n"
-                            break
                         yield f"data: {json.dumps({'type': 'view', 'data': view(), 'lan_url': lan_url}, ensure_ascii=False)}\n\n"
                     else:
                         yield f"data: {json.dumps(ev, ensure_ascii=False)}\n\n"

@@ -111,7 +111,7 @@ struct GameState: Codable, Equatable {
 
     func player(byToken token: String?) -> Player? {
         guard let token, !token.isEmpty else { return nil }
-        return players.values.first { $0.token == token }
+        return players.values.first { $0.token == token && !$0.claimable }
     }
 
     mutating func logPublic(_ kind: LogKind, _ who: String, _ text: String, phase: String = "") {
