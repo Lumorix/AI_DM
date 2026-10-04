@@ -25,6 +25,6 @@ $payload = @{text='现在请大家开始讨论。'} | ConvertTo-Json
 Invoke-WebRequest http://127.0.0.1:8775/v1/audio/speech -Method Post -ContentType 'application/json' -Body ([Text.Encoding]::UTF8.GetBytes($payload)) -OutFile "$env:TEMP\voice-test.wav"
 ```
 
-接口不接受客户端传模型路径或任意参考文件。缓存最多32条，仅在内存中，未实现持久化。播放队列、取消任务、游戏接入属于后续步骤。
+接口不接受客户端传模型路径或任意参考文件。内存缓存最多32条；示例配置已启用512 MiB磁盘缓存，按模型、参考录音和参数隔离，详见 CACHE.md。游戏播放队列、停止和跳过已接入，详见 PLAYBACK.md；停止播放不会强行中止已提交的GPU计算。
 
 不加载GPU的协议测试（测试文件与服务文件位于同一目录）：`python -m unittest test_voice_service.py`。这些测试使用假引擎验证HTTP协议、状态、缓存和错误恢复，不能证明真实模型的音质。

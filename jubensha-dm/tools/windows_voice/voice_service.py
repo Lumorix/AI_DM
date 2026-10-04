@@ -8,6 +8,7 @@ import json
 from pathlib import Path
 import threading
 import time
+from voice_cache import DiskCache, fingerprint
 
 
 @dataclass(frozen=True)
@@ -25,6 +26,8 @@ class Config:
     max_chars: int = 120
     cache_entries: int = 32
     port: int = 8775
+    cache_dir: Path | None = None
+    disk_cache_mib: int = 512
 
     @classmethod
     def load(cls, path):
@@ -37,9 +40,14 @@ class Config:
             if not isinstance(value, str) or not value.strip():
                 raise ValueError(f'{key} is required')
             values[key] = (path.parent / value).resolve()
+        if values.get('cache_dir') is not None:
+            if not isinstance(values['cache_dir'], str) or not values['cache_dir'].strip():
+                raise ValueError('Invalid cache_dir')
+            values['cache_dir'] = (path.parent / values['cache_dir']).resolve()
         cfg = cls(**values)
         for key, low, high in [('seed',0,2**32-1), ('threads',1,64), ('max_chars',1,500),
-                               ('max_new_tokens',32,2048), ('cache_entries',0,128), ('port',1024,65535)]:
+                               ('max_new_tokens',32,2048), ('cache_entries',0,128), ('port',1024,65535),
+                               ('disk_cache_mib',1,10240)]:
             value = getattr(cfg, key)
             if type(value) is not int or not low <= value <= high:
                 raise ValueError(f'Invalid {key}')
@@ -104,10 +112,16 @@ class VoiceService:
         self.failure = None
         self.lock = threading.Lock()
         self.cache = OrderedDict()
+        self.disk_cache = None
 
     def load(self, factory=QwenEngine):
         try:
             self.engine = factory(self.cfg)
+            if self.cfg.cache_dir:
+                try:
+                    self.disk_cache = DiskCache(self.cfg.cache_dir, fingerprint(self.cfg), self.cfg.disk_cache_mib)
+                except (OSError, ValueError) as exc:
+                    print(f'Disk cache disabled: {exc}', flush=True)
             self.status = 'ready'
         except Exception as exc:
             self.failure = 'model_load_failed'
@@ -179,7 +193,14 @@ def make_server(service, port=None):
                     data, metrics = service.cache[text]
                     service.cache.move_to_end(text)
                 else:
-                    data, metrics = service.engine.synthesize(text)
+                    saved = service.disk_cache.get(text) if service.disk_cache else None
+                    if saved is not None:
+                        data, metrics = saved
+                        hit = True
+                    else:
+                        data, metrics = service.engine.synthesize(text)
+                        if service.disk_cache:
+                            service.disk_cache.put(text, data, metrics)
                     if service.cfg.cache_entries:
                         service.cache[text] = (data, metrics)
                         while len(service.cache) > service.cfg.cache_entries:

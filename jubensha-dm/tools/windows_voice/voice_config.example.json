@@ -11,5 +11,7 @@
   "threads": 4,
   "max_chars": 120,
   "cache_entries": 32,
-  "port": 8775
+  "port": 8775,
+  "cache_dir": "../../data/VoiceCache/windows-api",
+  "disk_cache_mib": 512
 }

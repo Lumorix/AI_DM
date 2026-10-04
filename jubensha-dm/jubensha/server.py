@@ -12,6 +12,7 @@ from starlette.responses import FileResponse, JSONResponse, Response, StreamingR
 from starlette.routing import Route
 
 from .engine import Game
+from .voice_proxy import voice_proxy
 
 STATIC = Path(__file__).parent / "static"
 
@@ -186,7 +187,10 @@ def create_app(game: Game, lan_url: str = "") -> Starlette:
         elif action == "prev":
             await game.goto(st.phase_index - 1, narrate=False)
         elif action == "goto":
-            await game.goto(int(d.get("index", 0)), narrate=bool(d.get("narrate", True)))
+            index = d.get("index")
+            if type(index) is not int or not 0 <= index < len(game.script.phases):
+                return err("阶段编号必须是有效范围内的整数")
+            await game.goto(index, narrate=bool(d.get("narrate", True)))
         elif action == "replay":
             game.start_narration()
         elif action == "pause":
@@ -227,6 +231,8 @@ def create_app(game: Game, lan_url: str = "") -> Starlette:
         return FileResponse(STATIC / "index.html", headers={"Cache-Control": "no-cache"})
 
     routes = [
+        Route("/api/voice/health", voice_proxy),
+        Route("/api/voice/speech", voice_proxy, methods=["POST"]),
         Route("/", index),
         Route("/screen", page("screen.html")),
         Route("/player", page("player.html")),

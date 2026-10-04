@@ -133,6 +133,8 @@ class Game:
     # ---------------- 阶段推进 ----------------
     async def goto(self, index: int, narrate: bool = True) -> None:
         async with self.lock:
+            if self._narr_task and not self._narr_task.done():
+                self._narr_task.cancel()
             index = max(0, min(index, len(self.script.phases) - 1))
             forward = index > self.state.phase_index
             self.state.phase_index = index
@@ -165,6 +167,7 @@ class Game:
     async def _stream_public(self, messages: list[dict] | None, fallback: str, kind: str = "narration") -> str:
         """把一段话流式推到大屏和所有手机上，结束后写入公开记录。"""
         sid = secrets.token_hex(4)
+        phase_id = self.phase.id
         self.bus.send({"type": "stream_start", "id": sid, "who": "DM", "kind": kind})
         text = ""
         try:
@@ -176,7 +179,7 @@ class Game:
         except asyncio.CancelledError:
             self.bus.send({"type": "stream_end", "id": sid, "cancelled": True})
             if text:
-                self.state.log_public(kind, "DM", text + "……", self.phase.id)
+                self.state.log_public(kind, "DM", text + "……", phase_id)
                 self.changed()
             raise
         except LLMError as e:
@@ -188,7 +191,7 @@ class Game:
         self.bus.send({"type": "stream_end", "id": sid})
         if leak := self.leaks(text):
             self.state.warn(f"旁白里出现了禁用词「{leak}」，请检查剧本或改用原文念白（game.narration: verbatim）")
-        self.state.log_public(kind, "DM", text, self.phase.id)
+        self.state.log_public(kind, "DM", text, phase_id)
         self.changed()
         return text
 
@@ -282,19 +285,23 @@ class Game:
             return {"ok": False, "msg": "DM还在回答你上一个问题"}
         who = self.name_of(char_id)
         async with self.lock:
+            if char_id in self.busy:
+                return {"ok": False, "msg": "DM还在回答你上一个问题"}
+            context = (self.state.phase_index, self.state.phase_started_at, self.state.players[char_id].token)
+            self.busy.add(char_id)
             if public:
                 self.state.log_public("ask", who, question, self.phase.id)
             else:
                 self.state.log_private(char_id, "ask", who, question, self.phase.id)
-            self.changed()
-
-        if self.state.ai_paused:
-            reply = "DM暂时离开了，请稍后再问，或直接问在场的管理员。"
-            return await self._post_answer(char_id, reply, None, public)
-
-        self.busy.add(char_id)
-        self.bus.refresh()
+            try:
+                self.changed()
+            except Exception:
+                self.busy.discard(char_id)
+                raise
         try:
+            if self.state.ai_paused:
+                reply = "DM暂时离开了，请稍后再问，或直接问在场的管理员。"
+                return await self._post_answer(char_id, reply, None, public, context)
             reply, give = "", None
             for attempt in range(2):
                 msgs = prompts.ask_messages(self.script, self.state, self.phase, char_id, question, public,
@@ -305,6 +312,8 @@ class Game:
                     self.state.warn(f"AI回答失败：{e}")
                     reply, give = "（DM这边网络有点问题，请稍后再问一次）", None
                     break
+                if not self._answer_context_valid(char_id, context):
+                    return {"ok": False, "msg": "阶段或角色设备已变更，请在当前阶段重新提问"}
                 data = parse_json_reply(raw)
                 reply = str(data.get("reply") or "").strip() or "……"
                 give = data.get("give_clue")
@@ -322,13 +331,23 @@ class Game:
                     give = None
             else:
                 give = None
-            return await self._post_answer(char_id, reply, give, public)
+            return await self._post_answer(char_id, reply, give, public, context)
         finally:
             self.busy.discard(char_id)
             self.bus.refresh()
 
-    async def _post_answer(self, char_id: str, reply: str, give: str | None, public: bool) -> dict:
+    def _answer_context_valid(self, char_id, context):
+        p = self.state.players.get(char_id)
+        return bool(p and not p.claimable and context ==
+                    (self.state.phase_index, self.state.phase_started_at, p.token))
+
+    async def _post_answer(self, char_id: str, reply: str, give: str | None, public: bool, context=None) -> dict:
         async with self.lock:
+            if context is not None and not self._answer_context_valid(char_id, context):
+                return {"ok": False, "msg": "阶段或角色设备已变更，请在当前阶段重新提问"}
+            if give and (give not in self.phase.grantable or give in self.state.players[char_id].clues
+                         or give in self.state.public_clues):
+                give = None
             ph = self.phase.id
             if public:
                 self.state.log_public("answer", "DM", f"（回答{self.name_of(char_id)}）{reply}", ph)
