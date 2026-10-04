@@ -1,0 +1,753 @@
+{
+  "git_commit": "a37e9dd43d66674d108b7a1e4f1fca4206c3feb4",
+  "scope": "Currently tracked data/LocalTTS audio/model files, current working-tree bytes; no Git history or ignored outputs.",
+  "file_count": 124,
+  "total_bytes": 162872843,
+  "exact_duplicates": [],
+  "files": [
+    {
+      "path": "data/LocalTTS/seed-vc/baselines/dnsmos/model_v8.onnx",
+      "bytes": 224860,
+      "sha256": "9246480c58567bc6affd4200938e77eef49468c8bc7ed3776d109c07456f6e91",
+      "category": "model"
+    },
+    {
+      "path": "data/LocalTTS/seed-vc/campplus_cn_common.bin",
+      "bytes": 28036335,
+      "sha256": "3388cf5fd3493c9ac9c69851d8e7a8badcfb4f3dc631020c4961371646d5ada8",
+      "category": "model"
+    },
+    {
+      "path": "data/LocalTTS/seed-vc/examples/reference/azuma_0.wav",
+      "bytes": 628910,
+      "sha256": "3930141e927be50e7f3d666db5890ef9a4bda0623645483a6afaad241c82fb70",
+      "category": "vendor_example"
+    },
+    {
+      "path": "data/LocalTTS/seed-vc/examples/reference/s1p1.wav",
+      "bytes": 700714,
+      "sha256": "be291f04e9c239218082552e9e7c0dba9bad5ce6306d2c9d2104195840214b5a",
+      "category": "vendor_example"
+    },
+    {
+      "path": "data/LocalTTS/seed-vc/examples/reference/s1p2.wav",
+      "bytes": 526116,
+      "sha256": "07e937b52271380eeb52415428dc3fab6d530f767bf34b5e5cb52337ad294b17",
+      "category": "vendor_example"
+    },
+    {
+      "path": "data/LocalTTS/seed-vc/examples/reference/s2p1.wav",
+      "bytes": 664838,
+      "sha256": "308a38a5ac0a133a7d4742a95494d9670042fd9a233e60448f8370a9eba98a98",
+      "category": "vendor_example"
+    },
+    {
+      "path": "data/LocalTTS/seed-vc/examples/reference/s2p2.wav",
+      "bytes": 564012,
+      "sha256": "e6f73146fcfd25044317b377b0f2e8ae03ab43bd43ae8713f37889357babbd5e",
+      "category": "vendor_example"
+    },
+    {
+      "path": "data/LocalTTS/seed-vc/examples/reference/s3p1.wav",
+      "bytes": 557386,
+      "sha256": "0cc05439406e44eeaa7be15742aa71e2ca8b9c43adbcd496ea1672d9283aa9b0",
+      "category": "vendor_example"
+    },
+    {
+      "path": "data/LocalTTS/seed-vc/examples/reference/s4p1.wav",
+      "bytes": 618528,
+      "sha256": "53892ece071342958403bc5643f84169a30b89cc0fc79eb69508bfa11dd85e68",
+      "category": "vendor_example"
+    },
+    {
+      "path": "data/LocalTTS/seed-vc/examples/reference/s4p2.wav",
+      "bytes": 651098,
+      "sha256": "a2c71e9e60b1eb772c9bc50ceea66566c9797a58a265289486715afe37bea813",
+      "category": "vendor_example"
+    },
+    {
+      "path": "data/LocalTTS/seed-vc/examples/reference/teio_0.wav",
+      "bytes": 366402,
+      "sha256": "97af2b2fa7a950243f800bd5920d58841a1f602f7ccd23fc6479369956168842",
+      "category": "vendor_example"
+    },
+    {
+      "path": "data/LocalTTS/seed-vc/examples/source/glados_0.wav",
+      "bytes": 640058,
+      "sha256": "cb84353440fe0bcd44968fce96916074e9d573bfcf0da34a6d6c9a24fd3075e0",
+      "category": "vendor_example"
+    },
+    {
+      "path": "data/LocalTTS/seed-vc/examples/source/source_s1.wav",
+      "bytes": 599038,
+      "sha256": "b91167bc3b5b310da093f8dfd228c209398b180930fb889ab9388180518a3475",
+      "category": "vendor_example"
+    },
+    {
+      "path": "data/LocalTTS/seed-vc/examples/source/source_s2.wav",
+      "bytes": 675496,
+      "sha256": "32bf74dfb8342ccc8284f47a9e5fe1f41b458a983a00938ed170f76951ce638f",
+      "category": "vendor_example"
+    },
+    {
+      "path": "data/LocalTTS/seed-vc/examples/source/yae_0.wav",
+      "bytes": 528044,
+      "sha256": "543afcfdbf20c6fc9fdf04d97faa6d545f4b99a92e3fc90655f1cf75172b3abd",
+      "category": "vendor_example"
+    },
+    {
+      "path": "data/LocalTTS/voices/mandarin-ref/ref.wav",
+      "bytes": 456078,
+      "sha256": "f707941996966499959fee30208136b12bdc5a0b748cee7da4b6bf9633c5fd88",
+      "category": "source_or_reference_audio"
+    },
+    {
+      "path": "data/LocalTTS/voices/yachiyo/dataset/yachiyo_000.wav",
+      "bytes": 174124,
+      "sha256": "8498a5d45919a9cb33e9f39f4f562a08877e35039adb5fca8bfee36b40759c45",
+      "category": "training_clip"
+    },
+    {
+      "path": "data/LocalTTS/voices/yachiyo/dataset/yachiyo_001.wav",
+      "bytes": 152364,
+      "sha256": "3879232e386ddd900c722748ea55c038016d482df3f04e6ee62f437880056799",
+      "category": "training_clip"
+    },
+    {
+      "path": "data/LocalTTS/voices/yachiyo/dataset/yachiyo_002.wav",
+      "bytes": 240682,
+      "sha256": "7d46acda226d2507f6c5dfc29d18ccafe2c770a3209d2dba434081972712991a",
+      "category": "training_clip"
+    },
+    {
+      "path": "data/LocalTTS/voices/yachiyo/dataset/yachiyo_003.wav",
+      "bytes": 122924,
+      "sha256": "53e30acd20b36e4741736586fde3f5def3fd3608e6d56790a2deb14c988ebf77",
+      "category": "training_clip"
+    },
+    {
+      "path": "data/LocalTTS/voices/yachiyo/dataset/yachiyo_004.wav",
+      "bytes": 303402,
+      "sha256": "b12ff3b6531acadd32e289e68604e4feeca8d2de140deb48d83d9a08a3ec1808",
+      "category": "training_clip"
+    },
+    {
+      "path": "data/LocalTTS/voices/yachiyo/dataset/yachiyo_005.wav",
+      "bytes": 130604,
+      "sha256": "ca00b21bc64bfa8c9c74d965db26dd471fc9fef533e165c2ab79f8cae5c845d3",
+      "category": "training_clip"
+    },
+    {
+      "path": "data/LocalTTS/voices/yachiyo/dataset/yachiyo_006.wav",
+      "bytes": 212524,
+      "sha256": "dd2e41ab4452f2662ccffc6de85bd0660ef785277aca9459211dd42135e2953a",
+      "category": "training_clip"
+    },
+    {
+      "path": "data/LocalTTS/voices/yachiyo/dataset/yachiyo_007.wav",
+      "bytes": 116524,
+      "sha256": "ad878ee7d49e67126c8a11a0404b5ff3d5eed3bec697cec031d853c217698197",
+      "category": "training_clip"
+    },
+    {
+      "path": "data/LocalTTS/voices/yachiyo/dataset/yachiyo_008.wav",
+      "bytes": 202284,
+      "sha256": "caf2b95b5696585671f36f1667af82723a3579a6c8e42e4b2db8923918ad4d30",
+      "category": "training_clip"
+    },
+    {
+      "path": "data/LocalTTS/voices/yachiyo/dataset/yachiyo_010.wav",
+      "bytes": 238124,
+      "sha256": "022c4adf3a1e935287a46bba53c68abd9ade1ce278f1e090426747276f56d044",
+      "category": "training_clip"
+    },
+    {
+      "path": "data/LocalTTS/voices/yachiyo/dataset/yachiyo_011.wav",
+      "bytes": 341802,
+      "sha256": "dacd813c49495f69a834c992310b1b8cf2f0ec68c17115d5749b0047989cfca7",
+      "category": "training_clip"
+    },
+    {
+      "path": "data/LocalTTS/voices/yachiyo/dataset/yachiyo_012.wav",
+      "bytes": 302122,
+      "sha256": "f9b7d1e72ce414c84ee788fc5a1bc3e13483f7a4e309c6b904b5b9212dc43562",
+      "category": "training_clip"
+    },
+    {
+      "path": "data/LocalTTS/voices/yachiyo/dataset/yachiyo_013.wav",
+      "bytes": 147244,
+      "sha256": "c1f0c9a56cf9d071d04c024671b1a4a393e682f2571142300bd8fe04c0f403d5",
+      "category": "training_clip"
+    },
+    {
+      "path": "data/LocalTTS/voices/yachiyo/dataset/yachiyo_014.wav",
+      "bytes": 229162,
+      "sha256": "0aa97fb675c41a78aab4fd45e93f56d5e7864f7f99112d01b6ca63d640208929",
+      "category": "training_clip"
+    },
+    {
+      "path": "data/LocalTTS/voices/yachiyo/dataset/yachiyo_015.wav",
+      "bytes": 201004,
+      "sha256": "bb4529eff78d1287cfc7bb31bcf9c649b1244bddea0fcb9577f6026a46d3fe60",
+      "category": "training_clip"
+    },
+    {
+      "path": "data/LocalTTS/voices/yachiyo/dataset/yachiyo_016.wav",
+      "bytes": 340522,
+      "sha256": "f6b7b156573c0787b9ee789141ab9cef49ff44cd48a2e15056d0c24583f59208",
+      "category": "training_clip"
+    },
+    {
+      "path": "data/LocalTTS/voices/yachiyo/dataset/yachiyo_017.wav",
+      "bytes": 238124,
+      "sha256": "ab963e5a60fd4f8694b0e49d27c5c0fa77b68c61a6a9cecf94e23564451c2655",
+      "category": "training_clip"
+    },
+    {
+      "path": "data/LocalTTS/voices/yachiyo/dataset/yachiyo_018.wav",
+      "bytes": 197162,
+      "sha256": "4e91b5ef05bd43b62e4ae5322ca19c98800b898a13fbda3a61f07aac78a1c980",
+      "category": "training_clip"
+    },
+    {
+      "path": "data/LocalTTS/voices/yachiyo/dataset/yachiyo_019.wav",
+      "bytes": 221482,
+      "sha256": "b57242afa482e3301122c17bbdb68998510ef26d64a15339fd974a2560165fb7",
+      "category": "training_clip"
+    },
+    {
+      "path": "data/LocalTTS/voices/yachiyo/dataset/yachiyo_020.wav",
+      "bytes": 314926,
+      "sha256": "1acfc290ec75431daee8a7979843edbaa388d82f39cc60029faff7542103aecf",
+      "category": "training_clip"
+    },
+    {
+      "path": "data/LocalTTS/voices/yachiyo/dataset/yachiyo_021.wav",
+      "bytes": 286764,
+      "sha256": "606c94e52fd58d028cb11a47680644e98c8d4dea0e8c30e49f59c75e67ce30db",
+      "category": "training_clip"
+    },
+    {
+      "path": "data/LocalTTS/voices/yachiyo/dataset/yachiyo_022.wav",
+      "bytes": 245804,
+      "sha256": "734585e93b1f5e64a3034e613cce65a381f17fa46005a3d848e4f86acab4a01f",
+      "category": "training_clip"
+    },
+    {
+      "path": "data/LocalTTS/voices/yachiyo/dataset/yachiyo_023.wav",
+      "bytes": 238124,
+      "sha256": "24d07fb3fe9f9c32a6b71a75bc4ce02e08d6feaf1b77f662de45f31113b1afb3",
+      "category": "training_clip"
+    },
+    {
+      "path": "data/LocalTTS/voices/yachiyo/dataset/yachiyo_024.wav",
+      "bytes": 258606,
+      "sha256": "d718a348f2f6f77ce3f608b1ba3e5993f61dc182ca732a49f24922c06fc9f0da",
+      "category": "training_clip"
+    },
+    {
+      "path": "data/LocalTTS/voices/yachiyo/dataset/yachiyo_025.wav",
+      "bytes": 229164,
+      "sha256": "b587cce16e87243a1d33b8489eca888677be9c24d4e97ae9ab20ec98fe55620c",
+      "category": "training_clip"
+    },
+    {
+      "path": "data/LocalTTS/voices/yachiyo/dataset/yachiyo_026.wav",
+      "bytes": 295726,
+      "sha256": "ac6eaf1f8e634e51348f098c374607c1ebd0fc9a16a897957212722802b7d991",
+      "category": "training_clip"
+    },
+    {
+      "path": "data/LocalTTS/voices/yachiyo/dataset/yachiyo_027.wav",
+      "bytes": 163886,
+      "sha256": "fc24aa512abd53aa78e8c6542fbf0e86b48716ba0928f7a68c7f8d7ee1fe975f",
+      "category": "training_clip"
+    },
+    {
+      "path": "data/LocalTTS/voices/yachiyo/dataset/yachiyo_028.wav",
+      "bytes": 375086,
+      "sha256": "275cc4366186ea59fd90e78077e2f67cdf1b84bc314c7ebef516b83d01caffae",
+      "category": "training_clip"
+    },
+    {
+      "path": "data/LocalTTS/voices/yachiyo/dataset/yachiyo_029.wav",
+      "bytes": 426284,
+      "sha256": "ade50cf974d5a993eb1848b441580e52723bd328d89e4829dab21a6c3323b57b",
+      "category": "training_clip"
+    },
+    {
+      "path": "data/LocalTTS/voices/yachiyo/dataset/yachiyo_030.wav",
+      "bytes": 176684,
+      "sha256": "e3b03254fc487759a390226e066c7d927fdbd31106e910db8f0cda5108da017c",
+      "category": "training_clip"
+    },
+    {
+      "path": "data/LocalTTS/voices/yachiyo/dataset/yachiyo_031.wav",
+      "bytes": 243244,
+      "sha256": "4f331c845371e7558c9d5d3682e418928866bdb09fc6d1ba22f305ad4817c98d",
+      "category": "training_clip"
+    },
+    {
+      "path": "data/LocalTTS/voices/yachiyo/dataset/yachiyo_032.wav",
+      "bytes": 198444,
+      "sha256": "2da1ea986ff8b28b645cab226f6158b053f90d0e78be7dcbf4fc25e120e02800",
+      "category": "training_clip"
+    },
+    {
+      "path": "data/LocalTTS/voices/yachiyo/dataset/yachiyo_033.wav",
+      "bytes": 172844,
+      "sha256": "f2e4e0fb6dfceb9fdffdb1e050bf635836cd50fcaab9f629fb5849acde108855",
+      "category": "training_clip"
+    },
+    {
+      "path": "data/LocalTTS/voices/yachiyo/dataset/yachiyo_034.wav",
+      "bytes": 130604,
+      "sha256": "113bc64cc38d895c0948dee5996164507b9a635d750d9836f0ba02f0b8791976",
+      "category": "training_clip"
+    },
+    {
+      "path": "data/LocalTTS/voices/yachiyo/dataset/yachiyo_035.wav",
+      "bytes": 161324,
+      "sha256": "088c8f69452508b78cc00fab7e20d93e9f7ecbbf71c6c7f75270d2349edf6b4b",
+      "category": "training_clip"
+    },
+    {
+      "path": "data/LocalTTS/voices/yachiyo/dataset/yachiyo_036.wav",
+      "bytes": 169004,
+      "sha256": "d40b2bf6025c17a1f98b4dd08dbc8ecc7978e7697d96d3cc12b578461bca9562",
+      "category": "training_clip"
+    },
+    {
+      "path": "data/LocalTTS/voices/yachiyo/dataset/yachiyo_037.wav",
+      "bytes": 177964,
+      "sha256": "95e31a1754e0edea6ef93fce1c38d419ec3152bd2d7a9acc8e5659578b8e7cba",
+      "category": "training_clip"
+    },
+    {
+      "path": "data/LocalTTS/voices/yachiyo/dataset/yachiyo_038.wav",
+      "bytes": 236844,
+      "sha256": "7fe368de5dff7b48722d37cbce0e8c68683f3c91314b4e778f13547de20b4d72",
+      "category": "training_clip"
+    },
+    {
+      "path": "data/LocalTTS/voices/yachiyo/dataset/yachiyo_039.wav",
+      "bytes": 128044,
+      "sha256": "4c3cbd4781e33eb87578e509b2cf85c2ec82e61dbecd075c4e2ccc911fa5e9d3",
+      "category": "training_clip"
+    },
+    {
+      "path": "data/LocalTTS/voices/yachiyo/dataset/yachiyo_041.wav",
+      "bytes": 147244,
+      "sha256": "22937796663809636df9dbc4022904e3e99b692aa2a76dbe1ded8545d4ee09fe",
+      "category": "training_clip"
+    },
+    {
+      "path": "data/LocalTTS/voices/yachiyo/dataset/yachiyo_043.wav",
+      "bytes": 248364,
+      "sha256": "27c848226036e3d11e65f7c2dd3ad5a25f0c2edb065d9539a86b7e9354e1d102",
+      "category": "training_clip"
+    },
+    {
+      "path": "data/LocalTTS/voices/yachiyo/dataset/yachiyo_044.wav",
+      "bytes": 158764,
+      "sha256": "db2021eb131ece00cc0b01af1477a52368219ccc919c2a1aeb7a0005c5c5d0ab",
+      "category": "training_clip"
+    },
+    {
+      "path": "data/LocalTTS/voices/yachiyo/dataset/yachiyo_045.wav",
+      "bytes": 241966,
+      "sha256": "0ec5d4ee8bbc2345ebaaf6f994fb481fc36647ff1b8c92cbf124d695669df37c",
+      "category": "training_clip"
+    },
+    {
+      "path": "data/LocalTTS/voices/yachiyo/dataset/yachiyo_046.wav",
+      "bytes": 145964,
+      "sha256": "be94884099cf0a411b25a9a7b01cbe55bddd3a19e7ca8835abc3196fb744518e",
+      "category": "training_clip"
+    },
+    {
+      "path": "data/LocalTTS/voices/yachiyo/dataset/yachiyo_047.wav",
+      "bytes": 263724,
+      "sha256": "cef3e8d14b7a4befd7b9adbf7acddebbb80f858092bfd576ad440cc923b00af2",
+      "category": "training_clip"
+    },
+    {
+      "path": "data/LocalTTS/voices/yachiyo/dataset/yachiyo_048.wav",
+      "bytes": 145964,
+      "sha256": "59df325c9d052a6f6ca15eda4757ecbb7c23efd5148e2a24cfcca35f0b215e4e",
+      "category": "training_clip"
+    },
+    {
+      "path": "data/LocalTTS/voices/yachiyo/dataset/yachiyo_049.wav",
+      "bytes": 165164,
+      "sha256": "224efccf04faaaf6b8b904bb5c5cc381c711f720c81903d8e1b58bf4c5989abf",
+      "category": "training_clip"
+    },
+    {
+      "path": "data/LocalTTS/voices/yachiyo/dataset/yachiyo_051.wav",
+      "bytes": 169004,
+      "sha256": "7ca3d31287348f1b93b3e0abf44abcef1f188bd2f645bf0266b83ac82861756f",
+      "category": "training_clip"
+    },
+    {
+      "path": "data/LocalTTS/voices/yachiyo/dataset/yachiyo_052.wav",
+      "bytes": 105004,
+      "sha256": "2a3cd1bda241061024608d6451c3932d1e42c83968180cd5bb033236e9227b02",
+      "category": "training_clip"
+    },
+    {
+      "path": "data/LocalTTS/voices/yachiyo/dataset/yachiyo_053.wav",
+      "bytes": 163884,
+      "sha256": "78ef5584edaf611b25f9249ba9735fc8806d937db8087e60e9d6b683a21b8692",
+      "category": "training_clip"
+    },
+    {
+      "path": "data/LocalTTS/voices/yachiyo/dataset/yachiyo_054.wav",
+      "bytes": 120364,
+      "sha256": "eeee5a698f5629c737c691c95f243cae56062adeed499818a33fcbd26a5f0668",
+      "category": "training_clip"
+    },
+    {
+      "path": "data/LocalTTS/voices/yachiyo/dataset/yachiyo_055.wav",
+      "bytes": 120364,
+      "sha256": "cedee774b65339f7501eed172830e8a86383fe3fdc2dd0a80d9230261b9c9b6e",
+      "category": "training_clip"
+    },
+    {
+      "path": "data/LocalTTS/voices/yachiyo/dataset/yachiyo_056.wav",
+      "bytes": 135724,
+      "sha256": "e3a58d05e28cac8879c95a5d4e17f2a9dcaf8585c3f272fea1fbb29e1f894864",
+      "category": "training_clip"
+    },
+    {
+      "path": "data/LocalTTS/voices/yachiyo/dataset/yachiyo_057.wav",
+      "bytes": 156204,
+      "sha256": "78a0109f439ea5287febfbdd99321ca1bb143492733eb095b0d987c530428c84",
+      "category": "training_clip"
+    },
+    {
+      "path": "data/LocalTTS/voices/yachiyo/dataset/yachiyo_058.wav",
+      "bytes": 221484,
+      "sha256": "1eb74c19771f7d7cb00eae061bd28f3c7aba3327e3012951f5481acb4fe70527",
+      "category": "training_clip"
+    },
+    {
+      "path": "data/LocalTTS/voices/yachiyo/dataset/yachiyo_059.wav",
+      "bytes": 134444,
+      "sha256": "4e114c53c0797719725e346f2bfc4408649b0d9df5fde169ac55e23498648bd9",
+      "category": "training_clip"
+    },
+    {
+      "path": "data/LocalTTS/voices/yachiyo/dataset/yachiyo_060.wav",
+      "bytes": 115244,
+      "sha256": "985da724722290372d08c3dc28b2f4df18e6f168926bf61372ee4826d6535417",
+      "category": "training_clip"
+    },
+    {
+      "path": "data/LocalTTS/voices/yachiyo/dataset/yachiyo_061.wav",
+      "bytes": 258604,
+      "sha256": "61c873dedff3172487c8fc14a36b413db2bb191bc67b26718ede16613cf4beed",
+      "category": "training_clip"
+    },
+    {
+      "path": "data/LocalTTS/voices/yachiyo/dataset/yachiyo_062.wav",
+      "bytes": 299566,
+      "sha256": "4319eb15321e29e3ecddd3b4e228821341d6c647916a288dc93e6d7870355ad5",
+      "category": "training_clip"
+    },
+    {
+      "path": "data/LocalTTS/voices/yachiyo/dataset/yachiyo_063.wav",
+      "bytes": 233006,
+      "sha256": "a9aa2d59bd563a24e076d5f4062de56560a391de34c8a966e8e988f24ba07055",
+      "category": "training_clip"
+    },
+    {
+      "path": "data/LocalTTS/voices/yachiyo/dataset/yachiyo_064.wav",
+      "bytes": 94766,
+      "sha256": "31e4316e1d3acaf4b0ec43a9eff1ec29e1ed6aa5f886e4b44b883c8a0358866c",
+      "category": "training_clip"
+    },
+    {
+      "path": "data/LocalTTS/voices/yachiyo/dataset/yachiyo_065.wav",
+      "bytes": 257326,
+      "sha256": "3450a1295215c2f9ce0953e8516cdd84f9472602222653ae51610b4dde44d83b",
+      "category": "training_clip"
+    },
+    {
+      "path": "data/LocalTTS/voices/yachiyo/dataset/yachiyo_066.wav",
+      "bytes": 233004,
+      "sha256": "20e96d5c1db5816065909912be9c07935c51b21744bb668fd42cb08135ae54f0",
+      "category": "training_clip"
+    },
+    {
+      "path": "data/LocalTTS/voices/yachiyo/dataset/yachiyo_067.wav",
+      "bytes": 363564,
+      "sha256": "c39d6df6567b20ade186251a8bfe24ce809bd815a5cd1c273cf9b456c44005dc",
+      "category": "training_clip"
+    },
+    {
+      "path": "data/LocalTTS/voices/yachiyo/dataset/yachiyo_068.wav",
+      "bytes": 353324,
+      "sha256": "947dca4b664e214a8ccc58a20c69fcdf273c7ce0581c0af8f735a6e6a1b9d291",
+      "category": "training_clip"
+    },
+    {
+      "path": "data/LocalTTS/voices/yachiyo/dataset/yachiyo_069.wav",
+      "bytes": 212524,
+      "sha256": "88ab780356ea40de9ef905c01a13aa5b4242f10200ec07f93aefad0baf66e665",
+      "category": "training_clip"
+    },
+    {
+      "path": "data/LocalTTS/voices/yachiyo/dataset/yachiyo_070.wav",
+      "bytes": 276524,
+      "sha256": "efed8a22d834c33fc1828eabfee0c8bcd46c583a4c0922fef691b65b29b75b98",
+      "category": "training_clip"
+    },
+    {
+      "path": "data/LocalTTS/voices/yachiyo/dataset/yachiyo_071.wav",
+      "bytes": 250924,
+      "sha256": "875035cd7ab54580deb1cfd46bb756d8763f095a05c47779c3a3dd1384208638",
+      "category": "training_clip"
+    },
+    {
+      "path": "data/LocalTTS/voices/yachiyo/dataset/yachiyo_072.wav",
+      "bytes": 186924,
+      "sha256": "cce6767e72a8cec975ac855e677c004b82f47520801240730b29cc758dcb9b0a",
+      "category": "training_clip"
+    },
+    {
+      "path": "data/LocalTTS/voices/yachiyo/dataset/yachiyo_073.wav",
+      "bytes": 111404,
+      "sha256": "0c167c06a1ec4f1d31bce4ea435189831f4fe77eee705962ad4a218b865f4258",
+      "category": "training_clip"
+    },
+    {
+      "path": "data/LocalTTS/voices/yachiyo/dataset/yachiyo_074.wav",
+      "bytes": 227884,
+      "sha256": "ac40b72b3f3d86c3a0cda8ac18e1c53fb6687a43e9b4aa1a8b43810a7dd817f1",
+      "category": "training_clip"
+    },
+    {
+      "path": "data/LocalTTS/voices/yachiyo/dataset/yachiyo_075.wav",
+      "bytes": 224044,
+      "sha256": "4d4f3f8444b8e40c5fb5902e724fe64381222360f678aab715a740af262c8166",
+      "category": "training_clip"
+    },
+    {
+      "path": "data/LocalTTS/voices/yachiyo/dataset/yachiyo_076.wav",
+      "bytes": 259886,
+      "sha256": "a28c8ce858dd78a3f178b9387d7886e12f45773565e5559cb280164ef9f6a9f7",
+      "category": "training_clip"
+    },
+    {
+      "path": "data/LocalTTS/voices/yachiyo/dataset/yachiyo_077.wav",
+      "bytes": 117804,
+      "sha256": "a04019e46c30ddcdc5fdbe08bf884b12d672af51f3f6d1c6115c45b59e862235",
+      "category": "training_clip"
+    },
+    {
+      "path": "data/LocalTTS/voices/yachiyo/dataset/yachiyo_078.wav",
+      "bytes": 330286,
+      "sha256": "ca206bf43621ae8806c085a13cd0522b967da6452fb9e90a0bf9943545b84c75",
+      "category": "training_clip"
+    },
+    {
+      "path": "data/LocalTTS/voices/yachiyo/dataset/yachiyo_079.wav",
+      "bytes": 83244,
+      "sha256": "a867a10112fef4f9f00263708d859ebb48bba34fc81f98b67e39391564841ec0",
+      "category": "training_clip"
+    },
+    {
+      "path": "data/LocalTTS/voices/yachiyo/dataset/yachiyo_080.wav",
+      "bytes": 229164,
+      "sha256": "1cc66b01293ac981111832c290396de9b702757fe50f92b7d652850b38892fae",
+      "category": "training_clip"
+    },
+    {
+      "path": "data/LocalTTS/voices/yachiyo/dataset/yachiyo_081.wav",
+      "bytes": 211246,
+      "sha256": "e8fef944138125b7b56de68cc0d75f891c95965a2a2558a0f49fea50229348c7",
+      "category": "training_clip"
+    },
+    {
+      "path": "data/LocalTTS/voices/yachiyo/dataset/yachiyo_082.wav",
+      "bytes": 156206,
+      "sha256": "fac34520573f31e8394691c8d2d98b65e8d2ea66ed304166c06675a066a2da53",
+      "category": "training_clip"
+    },
+    {
+      "path": "data/LocalTTS/voices/yachiyo/dataset/yachiyo_083.wav",
+      "bytes": 106284,
+      "sha256": "c92e1252b6c3c83f4f80c0e936bc2cde2f5d7075e65c8112e20d7231e71f54f5",
+      "category": "training_clip"
+    },
+    {
+      "path": "data/LocalTTS/voices/yachiyo/dataset/yachiyo_084.wav",
+      "bytes": 98604,
+      "sha256": "1a1e0ac9058270653cd3885ee8c5f5831835706ea308f7042ed73880d39d8b6c",
+      "category": "training_clip"
+    },
+    {
+      "path": "data/LocalTTS/voices/yachiyo/dataset/yachiyo_085.wav",
+      "bytes": 222764,
+      "sha256": "83418c2ca746433d4e00074db0c5018b5d4fae62372e2f35ef8db8e7d865efd2",
+      "category": "training_clip"
+    },
+    {
+      "path": "data/LocalTTS/voices/yachiyo/dataset/yachiyo_086.wav",
+      "bytes": 170284,
+      "sha256": "5ab14b1dd71000276f52df4747ce95efe6b2bb291e6fba12515de2b42f1f434d",
+      "category": "training_clip"
+    },
+    {
+      "path": "data/LocalTTS/voices/yachiyo/dataset/yachiyo_087.wav",
+      "bytes": 108844,
+      "sha256": "a3cb12b594e20826bc84e107e5067e410595ae25c436853ab4f35de5733f5611",
+      "category": "training_clip"
+    },
+    {
+      "path": "data/LocalTTS/voices/yachiyo/dataset/yachiyo_088.wav",
+      "bytes": 207404,
+      "sha256": "6eca45430e3990e81056722048592830f55a944957cda26f10ae23806bfd7659",
+      "category": "training_clip"
+    },
+    {
+      "path": "data/LocalTTS/voices/yachiyo/dataset/yachiyo_089.wav",
+      "bytes": 266284,
+      "sha256": "8723b9fa5475c88568ee71196d44c4c4205f5e2e5e9dbae15bba7aa26045dbcd",
+      "category": "training_clip"
+    },
+    {
+      "path": "data/LocalTTS/voices/yachiyo/dataset/yachiyo_090.wav",
+      "bytes": 140844,
+      "sha256": "a9710521c86f9b4194401563059aae271c60102d724f133c6b5a11a01c0b7291",
+      "category": "training_clip"
+    },
+    {
+      "path": "data/LocalTTS/voices/yachiyo/dataset/yachiyo_091.wav",
+      "bytes": 107564,
+      "sha256": "ce799ee66028100c3b34fe9170b421ccd781e86f34a3393dc6f30f1e82a6a357",
+      "category": "training_clip"
+    },
+    {
+      "path": "data/LocalTTS/voices/yachiyo/dataset/yachiyo_092.wav",
+      "bytes": 90924,
+      "sha256": "061b8913f3fde6547b1260c210eae8c60656d6cb809231ad2ea3d8d385d65146",
+      "category": "training_clip"
+    },
+    {
+      "path": "data/LocalTTS/voices/yachiyo/dataset/yachiyo_095.wav",
+      "bytes": 268844,
+      "sha256": "4cfdd4a0962ec7c192ced6ffa99b13ccda37fffc6f8ce1904b506fcec94695dc",
+      "category": "training_clip"
+    },
+    {
+      "path": "data/LocalTTS/voices/yachiyo/dataset/yachiyo_096.wav",
+      "bytes": 138284,
+      "sha256": "591cf830588c86ac3d8ef181c407066aea619c1ab3a4b0aca60950aea23f3bc8",
+      "category": "training_clip"
+    },
+    {
+      "path": "data/LocalTTS/voices/yachiyo/dataset/yachiyo_097.wav",
+      "bytes": 268844,
+      "sha256": "b7d4474d67e633b4975dfcc243ba798336ee1b6df12873a57db8877d6c4e23c4",
+      "category": "training_clip"
+    },
+    {
+      "path": "data/LocalTTS/voices/yachiyo/dataset/yachiyo_098.wav",
+      "bytes": 266282,
+      "sha256": "8924d256697cee9d88117a50a0d97968d89030117ec338385d3d8a5f50572b0e",
+      "category": "training_clip"
+    },
+    {
+      "path": "data/LocalTTS/voices/yachiyo/eval/src_qwen_tingting/01.wav",
+      "bytes": 276524,
+      "sha256": "86307ef2824c1542ff78bbe459864ff4ccb1daf657116f129621c2321b8c0e6a",
+      "category": "evaluation_audio"
+    },
+    {
+      "path": "data/LocalTTS/voices/yachiyo/eval/src_qwen_tingting/02.wav",
+      "bytes": 334124,
+      "sha256": "0bd168f686c8f7d7b9817341828ca9dd7dcaf08dc614016bdd2949ff5146c9a9",
+      "category": "evaluation_audio"
+    },
+    {
+      "path": "data/LocalTTS/voices/yachiyo/eval/src_qwen_tingting/03.wav",
+      "bytes": 234284,
+      "sha256": "aaf9ec54e2e40bb6cda07cf1e8159dff62b1805b8728f1a3fcda5ba1cfe446c3",
+      "category": "evaluation_audio"
+    },
+    {
+      "path": "data/LocalTTS/voices/yachiyo/eval/src_qwen_tingting/04.wav",
+      "bytes": 234284,
+      "sha256": "1d84f99d156f65bc63cdbaa0662199f1cdef47b9fe147554f9d06409167002a6",
+      "category": "evaluation_audio"
+    },
+    {
+      "path": "data/LocalTTS/voices/yachiyo/eval/src_qwen_tingting/05.wav",
+      "bytes": 234284,
+      "sha256": "269b478b577b8de71702d740d15a121c1776b4416fcaed26074080de7f08f193",
+      "category": "evaluation_audio"
+    },
+    {
+      "path": "data/LocalTTS/voices/yachiyo/eval/src_qwen_tingting/06.wav",
+      "bytes": 0,
+      "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+      "category": "evaluation_audio"
+    },
+    {
+      "path": "data/LocalTTS/voices/yachiyo/eval/src_sys_tingting/01.wav",
+      "bytes": 293258,
+      "sha256": "fa92ffa7ff598d73d3c0d6a0c7a439662220b5c8bd27286cc2bc1193e431a349",
+      "category": "evaluation_audio"
+    },
+    {
+      "path": "data/LocalTTS/voices/yachiyo/eval/src_sys_tingting/02.wav",
+      "bytes": 310170,
+      "sha256": "a1f966174fd5bdd24899d12549488dfac6d88a1f0ee092cf7e55f626fb780bd9",
+      "category": "evaluation_audio"
+    },
+    {
+      "path": "data/LocalTTS/voices/yachiyo/eval/src_sys_tingting/03.wav",
+      "bytes": 222484,
+      "sha256": "6c3c4734979f2a85e6e9560380d94fb4f3f67bfeb5fa1d4681183fa3e1e43904",
+      "category": "evaluation_audio"
+    },
+    {
+      "path": "data/LocalTTS/voices/yachiyo/eval/src_sys_tingting/04.wav",
+      "bytes": 234936,
+      "sha256": "5dc9203ed512575595fdbc345255ef8509748246995330601af554228253a639",
+      "category": "evaluation_audio"
+    },
+    {
+      "path": "data/LocalTTS/voices/yachiyo/eval/src_sys_tingting/05.wav",
+      "bytes": 242302,
+      "sha256": "d24737c36cfeefe1d1172b8a84206c2637c53fd04b8b2103ee8f7443eff077b6",
+      "category": "evaluation_audio"
+    },
+    {
+      "path": "data/LocalTTS/voices/yachiyo/eval/src_sys_tingting/06.wav",
+      "bytes": 227700,
+      "sha256": "9d401a950744bce49ecbb183984015152fdd0ae296ec6e3eefc8e036f69fd2c9",
+      "category": "evaluation_audio"
+    },
+    {
+      "path": "data/LocalTTS/voices/yachiyo/source_44k.wav",
+      "bytes": 52052310,
+      "sha256": "11027efef33448763269d1793c79de2fc08ad961ddd538ef556ac09c3b0c67c1",
+      "category": "source_or_reference_audio"
+    },
+    {
+      "path": "data/LocalTTS/voices/yachiyo/vocals_clean_44k.wav",
+      "bytes": 52051244,
+      "sha256": "8a6ab35d4583f24318419f4989beecb33cefdf442a61430f74432069d7027e3d",
+      "category": "source_or_reference_audio"
+    },
+    {
+      "path": "data/LocalTTS/voices/yachiyo/综合/试听.wav",
+      "bytes": 353324,
+      "sha256": "eb5febcf19ce3e652261d602bb76b3e56c688ee4622f9a930f2b82264dd2ded3",
+      "category": "source_or_reference_audio"
+    }
+  ]
+}

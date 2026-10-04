@@ -1,6 +1,13 @@
-# Windows GPU 语音测试
+# Windows GPU 语音：环境、实验与服务
 
-在 Mac 编写应用，在 Windows 的 NVIDIA GPU 上运行此测试。此目录是独立的 PyTorch 语音入口，不修改现有 Mac MLX 服务。
+此目录是 Windows NVIDIA GPU 的独立 PyTorch 语音入口，与游戏 Python `.venv`、Mac 原生应用及 Mac MLX 服务分开。平台区别与游戏启动见[项目 README](../../../README.md)。
+
+## 当前状态（2026-10-04）
+
+- 已有 CUDA 合成测试、八千代参考音色、30 步 LoRA 小实验，以及本机语音 API、游戏播放队列和缓存。
+- 游戏接入请看 [VOICE-API.md](VOICE-API.md)、[PLAYBACK.md](PLAYBACK.md)、[CACHE.md](CACHE.md)。服务目前仅限 Windows 本机，Mac 远程调用尚未接通。
+- 中文开头发音及长句音色一致性尚未达标，持续实时生成未验收；日语 LoRA 的 B 方向已被用户否定，不能把训练损失下降视为音质通过。
+- 下方首次实测与微调记录是历史实验结果，不代表当前正在训练或声音已经可正式使用。
 
 ## 环境
 
@@ -27,7 +34,7 @@ powershell -ExecutionPolicy Bypass -File .\tools\windows_voice\setup.ps1
 .\data\LocalTTS\windows\.venv\Scripts\python.exe -X utf8 .\tools\windows_voice\smoke_cuda.py --offline --text "各位玩家，请开始第一轮讨论。"
 ```
 
-`--voice` 指定 `data/LocalTTS/voices/` 下同时包含 `ref.wav` 与准确 `ref.txt` 的子目录。目前八千代素材尚未整理成该格式。
+`--voice` 指定 `data/LocalTTS/voices/` 下同时包含 `ref.wav` 与 `ref.txt` 的子目录。已有八千代参考素材与实验配置，但转录及参考音频质量仍需人工审核；当前服务选用的路径以 `voice_config.example.json` 或本机配置为准。
 
 输出写到 `data/LocalTTS/windows/outputs/<时间>/smoke.wav` 和 `metrics.json`。指标包括模型载入时间、合成时间、音频长度和 PyTorch 显存峰值。显存峰值不包含桌面/浏览器或 CUDA 驱动等全部占用；实时倍率小于 1 表示合成比播放快。首次运行还可能包含初始化开销。
 
@@ -36,10 +43,10 @@ powershell -ExecutionPolicy Bypass -File .\tools\windows_voice\setup.ps1
 ## 保存与协作
 
 - 提交本目录的脚本和说明。
-- `.venv/`、模型、HF 缓存和 `outputs/` 已由项目规则忽略，不提交 Git。
+- `.venv/`、模型、HF 缓存和 `outputs/` 应保持本地；忽略规则不会移除已受 Git 跟踪的历史文件，提交前仍需检查暂存差异。
 - Mac 与 Windows 分别建立环境，不复制虚拟环境。
 - Mac 当前仍调用本机 MLX 服务；远程 Windows 语音 API 与 Mac 设置尚待接入。
-- 训练前先用固定文本建立试听基准，审查数据切片及转录。该 8GB GPU 尚未验证微调配置。
+- 训练前先用固定文本建立试听基准，审查数据切片及转录。该 8GB GPU 已跑过下述小规模 LoRA 实验，尚不能据此保证更大训练配置或最终音质。
 
 ## RTX 4060 首次实测（2026-10-02）
 
