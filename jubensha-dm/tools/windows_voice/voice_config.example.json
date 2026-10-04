@@ -1,0 +1,15 @@
+{
+  "model_path": "../../data/LocalTTS/models/Qwen3-TTS-12Hz-0.6B-Base-pytorch",
+  "reference_audio": "../../data/LocalTTS/windows/outputs/yachiyo-data-20261003-094046/ref.wav",
+  "reference_text": "",
+  "speaker_only": true,
+  "language": "Chinese",
+  "seed": 42,
+  "temperature": 0.9,
+  "max_new_tokens": 768,
+  "whole_text": false,
+  "threads": 4,
+  "max_chars": 120,
+  "cache_entries": 32,
+  "port": 8775
+}
