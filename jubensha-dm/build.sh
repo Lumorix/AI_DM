@@ -1,15 +1,31 @@
 #!/bin/bash
 # 编译并打包成 Mac 应用：build/AI 剧本杀.app
 # 只需要 Xcode 命令行工具（xcode-select --install），不需要完整的 Xcode。
+# 用法：bash build.sh [release|debug] [swift build 参数，例如 --sdk 路径]
 set -euo pipefail
 cd "$(dirname "$0")"
 
 CONFIG="${1:-release}"
+if [ "$#" -gt 0 ]; then shift; fi
 APP="build/AI 剧本杀.app"
 
-echo "▸ 编译（$CONFIG）……"
-swift build -c "$CONFIG"
-BIN="$(swift build -c "$CONFIG" --show-bin-path)/AIDM"
+# Some Command Line Tools installations have the macOS 27 SDK but lack its
+# State macro plugin. Use the installed older SDK unless build flags were given.
+FALLBACK_SDK="/Library/Developer/CommandLineTools/SDKs/MacOSX26.5.sdk"
+if [ "$#" -eq 0 ] && [ -d "$FALLBACK_SDK" ]; then
+  DEFAULT_SDK="$(xcrun --sdk macosx --show-sdk-path 2>/dev/null || true)"
+  SWIFT_BIN="$(xcrun --find swift 2>/dev/null || true)"
+  if [ -n "$DEFAULT_SDK" ] && [ -n "$SWIFT_BIN" ] &&
+     [ ! -f "${SWIFT_BIN%/bin/swift}/lib/swift/host/plugins/libSwiftUIMacros.dylib" ] &&
+     grep -q 'public macro State' "$DEFAULT_SDK"/System/Library/Frameworks/SwiftUICore.framework/Modules/SwiftUICore.swiftmodule/*.swiftinterface 2>/dev/null; then
+    echo "▸ 当前工具缺少 SwiftUI State 插件，使用已安装的 macOS 26.5 SDK。"
+    set -- --sdk "$FALLBACK_SDK"
+  fi
+fi
+
+echo "▸ 编译（${CONFIG}）……"
+swift build -c "$CONFIG" "$@"
+BIN="$(swift build -c "$CONFIG" "$@" --show-bin-path)/AIDM"
 
 echo "▸ 打包 $APP"
 rm -rf "$APP"

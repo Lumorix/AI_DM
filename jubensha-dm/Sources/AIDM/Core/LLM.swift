@@ -60,7 +60,7 @@ func parseJSONReply(_ raw: String) -> [String: Any] {
 }
 
 /// 游戏仅依赖此接口；测试可控制回答完成时机，无需访问真实模型。
-protocol GameLanguageModel: Sendable {
+protocol GameLanguageModel: AnyObject, Sendable {
     var label: String { get }
     func chat(_ messages: [ChatMessage], maxTokens: Int?) async throws -> String
     func stream(_ messages: [ChatMessage], maxTokens: Int?) -> AsyncThrowingStream<String, Error>

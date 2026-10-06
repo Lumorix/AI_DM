@@ -76,7 +76,12 @@ final class Game {
 
     func updateModels(llm: any GameLanguageModel, cheap: (any GameLanguageModel)?) {
         self.llm = llm
-        self.cheap = cheap ?? llm
+        // Separate assignments avoid a Swift 6.4 optimizer crash in the observable setter.
+        if let cheap {
+            self.cheap = cheap
+        } else {
+            self.cheap = llm
+        }
         changed()
     }
 
