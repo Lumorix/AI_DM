@@ -9,16 +9,17 @@ import Security
 
 enum Paths {
     /// 应用数据（剧本、存档、语音模型……）放在哪：
-    /// 1. 设置里指定的 dataRoot；2. 应用旁边的项目文件夹里有 data/ 就用它（build/AI 剧本杀.app → ../data）；
-    /// 3. 否则 ~/Library/Application Support/AI DM
+    /// 1. 设置里指定的 dataRoot；2. 应用旁边就有 data/（打包给别的电脑时的摆法）；
+    /// 3. 应用所在项目文件夹里的 data/（build/AI 剧本杀.app → ../data）；4. 否则 ~/Library/Application Support/AI DM
     static let support: URL = {
         let fm = FileManager.default
         var candidates: [URL] = []
         if let custom = UserDefaults.standard.string(forKey: "dataRoot"), !custom.isEmpty {
             candidates.append(URL(fileURLWithPath: custom, isDirectory: true))
         }
-        let projectOfApp = Bundle.main.bundleURL.deletingLastPathComponent().deletingLastPathComponent()
-        candidates.append(projectOfApp.appendingPathComponent("data", isDirectory: true))
+        let besideApp = Bundle.main.bundleURL.deletingLastPathComponent()
+        candidates.append(besideApp.appendingPathComponent("data", isDirectory: true))
+        candidates.append(besideApp.deletingLastPathComponent().appendingPathComponent("data", isDirectory: true))
         let repo = URL(fileURLWithPath: #filePath).deletingLastPathComponent().deletingLastPathComponent()
             .deletingLastPathComponent().deletingLastPathComponent()
         candidates.append(repo.appendingPathComponent("data", isDirectory: true))       // swift run 开发时
@@ -154,6 +155,7 @@ final class Narrator: NSObject, SpeechSink, ObservableObject, AVSpeechSynthesize
     var voiceKey = ""
     @Published var lastError: String?
     private let clip = ClipPlayer()
+    private let streamer = StreamPlayer()
     private var queue: [String] = []
     private var pipeline: Task<Void, Never>?
     private var pipelineID = UUID()
@@ -165,6 +167,7 @@ final class Narrator: NSObject, SpeechSink, ObservableObject, AVSpeechSynthesize
         synth.delegate = self
         rate = UserDefaults.standard.object(forKey: "ttsRate") as? Float ?? 0.5
         voiceID = UserDefaults.standard.string(forKey: "ttsVoice") ?? ""
+        enabled = UserDefaults.standard.object(forKey: "ttsEnabled") as? Bool ?? true     // 默认开着：DM 每句话都念出来
     }
 
     static var chineseVoices: [AVSpeechSynthesisVoice] {
@@ -198,22 +201,35 @@ final class Narrator: NSObject, SpeechSink, ObservableObject, AVSpeechSynthesize
     private func synthTask(_ text: String) -> Task<(String, Data?), Never> {
         let cfg = voiceConfig, key = voiceKey
         return Task {
-            do {
-                return (text, try await VoiceCache.synthesize(text, cfg: cfg, key: key))
-            } catch {
-                await MainActor.run { self.lastError = "八千代音色合成失败，临时改用系统声音：\(error.localizedDescription)" }
-                return (text, nil)
+            // 偶尔失败（比如后台语音服务刚好重启）就再试两次，尽量都用八千代的声音；实在不行才临时用系统声音，保证这句一定念出来
+            var last: Error?
+            for attempt in 0..<3 {
+                if Task.isCancelled { break }
+                do {
+                    return (text, try await VoiceCache.synthesize(text, cfg: cfg, key: key))
+                } catch {
+                    last = error
+                    try? await Task.sleep(nanoseconds: UInt64(attempt + 1) * 500_000_000)
+                }
             }
+            let msg = last?.localizedDescription ?? ""
+            await MainActor.run { self.lastError = "八千代音色合成失败，这句临时用了系统声音：\(msg)" }
+            return (text, nil)
+        }
+    }
+
+    private func startMeter() {
+        meter = Timer.scheduledTimer(withTimeInterval: 1.0 / 30, repeats: true) { [weak self] _ in
+            MainActor.assumeIsolated { if let self { self.avatar.send(.level(max(self.clip.level, self.streamer.level))) } }
         }
     }
 
     private func startPipeline() {
+        if voiceConfig.engine == .local { startLocalPipeline(); return }
         let id = UUID()
         pipelineID = id
         avatar.send(.talking(true))
-        meter = Timer.scheduledTimer(withTimeInterval: 1.0 / 30, repeats: true) { [weak self] _ in
-            MainActor.assumeIsolated { if let self { self.avatar.send(.level(self.clip.level)) } }
-        }
+        startMeter()
         pipeline = Task { [weak self] in
             var next: Task<(String, Data?), Never>?
             while let self, !Task.isCancelled {
@@ -240,6 +256,69 @@ final class Narrator: NSObject, SpeechSink, ObservableObject, AVSpeechSynthesize
         }
     }
 
+    /// 本机音色：一句一句边合成边播放。上一句还在放的时候就开始合成下一句，排在它后面，衔接不断
+    private func startLocalPipeline() {
+        let id = UUID()
+        pipelineID = id
+        avatar.send(.talking(true))
+        startMeter()
+        pipeline = Task { [weak self] in
+            while let self, !Task.isCancelled {
+                if !self.queue.isEmpty {
+                    await self.speakLocal(self.queue.removeFirst())
+                } else if !self.streamer.isIdle || self.synth.isSpeaking {
+                    try? await Task.sleep(nanoseconds: 50_000_000)       // 等这段放完，期间可能又来新句子
+                } else {
+                    break
+                }
+            }
+            guard let self, self.pipelineID == id else { return }
+            self.meter?.invalidate()
+            self.meter = nil
+            self.pipeline = nil
+            self.avatar.send(.talking(false))
+        }
+    }
+
+    private func speakLocal(_ text: String) async {
+        let cfg = voiceConfig
+        if let d = VoiceCache.get(text, cfg), streamer.enqueue(wav: d) { return }
+        var failure: Error?
+        for attempt in 0..<3 {          // 偶尔失败（比如服务刚好重启）就再试，尽量都用八千代的声音
+            if Task.isCancelled { return }
+            var pcm = Data()
+            do {
+                let (rate, chunks) = try await LocalTTS.shared.stream(text, voice: cfg.localVoice)
+                for try await c in chunks {
+                    if Task.isCancelled { return }
+                    streamer.enqueue(pcm16: c, sampleRate: rate)
+                    pcm.append(c)
+                }
+                if Task.isCancelled { return }
+                VoiceCache.put(WAV.wrap(pcm16: pcm, sampleRate: Int(rate)), text, cfg)
+                lastError = nil
+                return
+            } catch {
+                if Task.isCancelled { return }
+                failure = error
+                if !pcm.isEmpty { return }      // 念到一半断了：念出来的部分就算了，不重复
+                try? await Task.sleep(nanoseconds: UInt64(attempt + 1) * 500_000_000)
+            }
+        }
+        // 实在不行才临时用系统声音，保证这句一定念出来
+        lastError = "八千代音色合成失败，这句临时用了系统声音：\(failure?.localizedDescription ?? "")"
+        while !streamer.isIdle && !Task.isCancelled { try? await Task.sleep(nanoseconds: 50_000_000) }
+        if Task.isCancelled { return }
+        speakSystem(text)
+        while synth.isSpeaking && !Task.isCancelled { try? await Task.sleep(nanoseconds: 100_000_000) }
+    }
+
+    /// 正在念（或者还有句子排着）
+    var isBusy: Bool { pipeline != nil || synth.isSpeaking }
+
+    /// 命令行测试用：照常合成和播放，但不出声
+    func muteForTesting() { streamer.muted = true }
+
     func preview(_ text: String) {
         stop()
         speak(text)
@@ -248,7 +327,7 @@ final class Narrator: NSObject, SpeechSink, ObservableObject, AVSpeechSynthesize
     func say(_ text: String) {
         let t = text.trimmingCharacters(in: .whitespacesAndNewlines)
         guard !t.isEmpty else { return }
-        if enabled { speak(t) } else { talkSilently(seconds: min(8, Double(t.count) * 0.16)) }
+        if enabled { Sentences.split(t).forEach(speak) } else { talkSilently(seconds: min(8, Double(t.count) * 0.16)) }
     }
 
     /// 没开语音时，形象按字数“说”一会儿
@@ -268,6 +347,7 @@ final class Narrator: NSObject, SpeechSink, ObservableObject, AVSpeechSynthesize
         pipeline = nil
         queue.removeAll()
         clip.stop()
+        streamer.stop()
         meter?.invalidate()
         meter = nil
         synth.stopSpeaking(at: .immediate)
@@ -287,6 +367,14 @@ final class Narrator: NSObject, SpeechSink, ObservableObject, AVSpeechSynthesize
         while let r = buf.range(of: Sentences.pattern, options: .regularExpression) {
             say(String(buf[r]))
             buf.removeSubrange(r)
+        }
+        // 一长串没有句号的话（“第一，……；第二，……”）：攒够一截就先从逗号/分号处开口，不等整句写完
+        if buf.count > Sentences.maxChars {
+            let pieces = Sentences.split(buf)
+            if pieces.count > 1 {
+                pieces.dropLast().forEach(say)
+                buf = pieces.last ?? ""
+            }
         }
     }
 

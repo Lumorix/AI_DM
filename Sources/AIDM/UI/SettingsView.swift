@@ -492,7 +492,7 @@ private struct PregenSection: View {
                     Button("停止") { task?.cancel() }
                 } else {
                     Button(cached == lines.count && !lines.isEmpty ? "已全部保存" : "生成并保存到本机") { start() }
-                        .disabled(!cfg.usable || model.dashscopeKey.isEmpty || lines.isEmpty || cached == lines.count)
+                        .disabled(!cfg.usable || (cfg.engine == .qwen && model.dashscopeKey.isEmpty) || lines.isEmpty || cached == lines.count)
                 }
                 Spacer()
                 Button("打开语音文件夹") { NSWorkspace.shared.open(VoiceCache.dir) }
@@ -558,8 +558,8 @@ private struct LocalVoiceSection: View {
                             VStack(alignment: .leading, spacing: 2) {
                                 HStack(spacing: 6) {
                                     Text(v)
-                                    if LocalTTS.isSoVITS(v) {
-                                        Text("训练模型").font(.caption2).padding(.horizontal, 6).padding(.vertical, 1)
+                                    if LocalTTS.isTuned(v) {
+                                        Text("已调校").font(.caption2).padding(.horizontal, 6).padding(.vertical, 1)
                                             .background(Color.accentColor.opacity(0.2), in: Capsule())
                                     }
                                 }
@@ -573,7 +573,7 @@ private struct LocalVoiceSection: View {
                     .accessibilityLabel("使用本机音色 \(v)")
                     if busy == v { ProgressView().controlSize(.small) }
                     Button("原声") { play(LocalTTS.voicesDir.appendingPathComponent(v).appendingPathComponent("ref.wav")) }
-                    Button("试听中文") { Task { await preview(v) } }.disabled(busy != nil || !LocalTTS.isInstalled)
+                    Button("试听中文") { Task { await preview(v) } }.disabled(busy != nil || !LocalTTS.isUsable(v))
                 }
             }
             if let error { Text(error).font(.caption).foregroundStyle(.red).textSelection(.enabled) }
@@ -587,7 +587,7 @@ private struct LocalVoiceSection: View {
         .onAppear {
             voices = LocalTTS.voices()
             if model.settings.voice.localVoice.isEmpty,
-               let v = voices.first(where: LocalTTS.isSoVITS) ?? voices.first(where: { $0.hasSuffix("综合") }) ?? voices.first {
+               let v = voices.first(where: LocalTTS.isTuned) ?? voices.first(where: { $0.hasSuffix("综合") }) ?? voices.first {
                 model.settings.voice.localVoice = v
             }
         }

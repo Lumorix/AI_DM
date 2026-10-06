@@ -147,12 +147,19 @@ final class AppModel {
         reloadLibrary()
         autoPickVoice()
         applyVoice()
+        // 第一次打开（比如拷到另一台 Mac）还没选过形象：有模型就直接用第一个
+        if avatarModel == nil, let first = avatarModels.first { settings.avatar.model = first.name }
+        // 本机音色一打开 App 就在后台加载（约 5 秒），开局第一句就能马上念
+        if settings.voice.engine == .local, settings.voice.usable {
+            let v = settings.voice.localVoice
+            Task { _ = try? await LocalTTS.shared.synthesize("好。", voice: v) }
+        }
     }
 
-    /// 本机有八千代的音色时自动用上（用户自己没选过声音时；训练好的模型出来后自动换成训练版）
+    /// 本机有八千代的音色时自动用上（用户自己没选过声音时）
     func autoPickVoice() {
-        let voices = LocalTTS.voices().filter { LocalTTS.isSoVITS($0) ? SoVITSService.isInstalled : LocalTTS.isInstalled }
-        guard let best = voices.first(where: LocalTTS.isSoVITS) ?? voices.first(where: { $0.hasSuffix("综合") }) ?? voices.first else { return }
+        let voices = LocalTTS.voices().filter(LocalTTS.isUsable)
+        guard let best = voices.first(where: LocalTTS.isTuned) ?? voices.first(where: { $0.hasSuffix("综合") }) ?? voices.first else { return }
         let last = UserDefaults.standard.string(forKey: "autoVoice")
         let neverChosen = settings.voice.engine == .system && settings.voice.localVoice.isEmpty
         let stillAuto = settings.voice.engine == .local && settings.voice.localVoice == last
@@ -363,9 +370,6 @@ final class AppModel {
                 }
                 state = GameState(scriptTitle: script.title)
                 state.logPublic(.system, "系统", "《\(script.title)》即将开始。请用手机扫码或打开链接选择角色。")
-                if let first = script.phases.first, !first.dmScript.isEmpty {   // 第一阶段的主持词先显示在大屏上
-                    state.logPublic(.narration, "DM", first.dmScript, phase: first.id)
-                }
                 try state.save(to: savePath)
             }
             var gs = settings.game
@@ -379,9 +383,11 @@ final class AppModel {
             }
             let port = try await server.start(preferred: UInt16(clamping: settings.port))
             session = Session(game: game, server: server, router: router, port: port, ip: LAN.address())
-            if settings.voice.engine == .local, settings.voice.usable {      // 提前加载本机音色，第一句不用等
-                let v = settings.voice.localVoice
-                Task { _ = try? await LocalTTS.shared.synthesize("好。", voice: v) }
+            // 新开的一局：DM 马上开口念第一阶段的主持词（继续存档时不自动念，主界面有“再念一遍”）
+            if state.phaseIndex == 0 && !state.publicLog.contains(where: { $0.kind == .narration }) {
+                game.startNarration()
+            } else {
+                game.welcomeBack()
             }
         } catch {
             alert = .init(title: "无法开始游戏", message: error.localizedDescription)

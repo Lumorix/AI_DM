@@ -41,6 +41,10 @@ struct DMView: View {
             }
             Spacer()
             PhaseTimer(game: game, size: 26)
+            Button { game.startNarration() } label: { Label("再念一遍", systemImage: "arrow.counterclockwise") }
+                .buttonStyle(.ink(.secondary, large: true))
+                .disabled(game.phase.dmScript.isEmpty && game.phase.type != .reveal)
+                .help("把这个阶段的主持词从头再念一遍")
             Button { game.next() } label: { Label("下一阶段", systemImage: "forward.end.fill") }
                 .buttonStyle(.ink(.primary, large: true))
                 .disabled(game.state.phaseIndex >= game.script.phases.count - 1)

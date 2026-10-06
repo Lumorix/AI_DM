@@ -186,6 +186,14 @@ final class Game {
 
     func stopNarration() { narrTask?.cancel() }
 
+    /// 继续存档时 DM 先打个招呼（不重念整段主持词，想听就点“再念一遍”）
+    func welcomeBack() {
+        let line = "欢迎回来，我们接着玩《\(script.title)》。现在是第\(state.phaseIndex + 1)阶段：\(phase.title)。"
+        state.logPublic(.narration, "DM", line, phase: phase.id)
+        changed()
+        speech?.say(line)
+    }
+
     /// 把一段话流式推到大屏和所有手机上，结束后写入公开记录
     @discardableResult
     private func streamPublic(_ messages: [ChatMessage]?, fallback: String, kind: LogKind = .narration) async -> String {
@@ -368,6 +376,7 @@ final class Game {
             let r = "DM暂时离开了，请稍后再问。"
             state.logPublic(.answer, "DM", r, phase: phase.id)
             changed()
+            speech?.say(r)
             return ActionResult(ok: true, extra: ["reply": r])
         }
         tableBusy = true

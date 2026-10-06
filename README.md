@@ -102,17 +102,35 @@ API Key 保存在 macOS 钥匙串里。主持和判定需要较强的推理和�
 
 ## 六、DM 的声音
 
-**设置 › 语音**：
+默认用**八千代的本机音色**（`data/LocalTTS/voices/yachiyo/八千代`）：在这台 Mac 上用 Qwen3-TTS（mlx-audio，苹果芯片）合成，不联网、不花钱，普通话标准。
 
-- **系统自带语音**：离线可用。想要更自然：系统设置 › 辅助功能 › 朗读内容 › 管理声音，下载“婷婷（高音质）”。
-- **阿里云 Qwen 克隆音色**（比如八千代）：
-  1. 在阿里云百炼控制台开通服务、创建 API Key，填进来（AI 主持用的是通义千问的话可以不填，会自动借用）。地区要和账号对应。
-  2. 准备一段 10~20 秒、清晰、没有背景音乐、只有一个人说话的录音（wav/mp3/m4a，小于 10MB）。
-  3. 点“创建克隆音色”，成功后音色 ID 自动填好，点“试听”。
-  - 音色 ID 只在创建它的账号里能用，别人项目里给的 ID 换成你的 Key 一般用不了。
-  - 合成失败会临时改用系统声音，不会卡住游戏。克隆音色请仅用于个人娱乐。
+- **语音默认开着，DM 的每句话都会念出来**：旁白、复盘、当面提问的回答、手机上公开提问的回答。只回答某个玩家的私聊不念（免得别人听到）。顶栏 🔊 可以临时关掉，下次打开 App 会记住。
+- 偶尔合成失败会自动重试；连续失败才临时用系统声音念这一句，保证不漏句、不卡住游戏。
+- **实时朗读**：AI 写完一句，约 0.2～0.7 秒八千代就开口（很长的一串话会从逗号、分号处先开口）；边合成边播放，上一句还在念时下一句已经在合成，句子之间不停顿。模型压成 8 位运行（苹果芯片上快一倍多，音质基本不变），每秒能合成约 1.6 秒的语音。
+- 打开 App 时在后台加载声音模型（约 5 秒），开局第一句就能马上念。念过的句子会存起来，再念同一句直接播放。
+- 剧本里固定的台词也可以提前生成（可选，一般不需要）：`AIDM --pregen 剧本.yaml`，或者 设置 › 语音 › “生成并保存到本机”。
+- 测一下延迟：`AIDM --speak-test`（静音模拟 AI 一边写一边念，打印第一声多久出来）。
+- 试一句：`AIDM --local-tts yachiyo/综合 "各位侦探，欢迎来到六角馆。" out.wav`
 
-大屏右下角（鼠标移上去）可以随时开关“语音朗读”。
+**音色文件夹**（`data/LocalTTS/voices/<名字>/`）：`ref.wav` 参考录音、`ref.txt` 原话，可选 `voice.json` 合成参数：
+
+```json
+{"icl": true, "temperature": 0.4, "top_k": 50, "top_p": 1.0, "repetition_penalty": 1.1, "streaming_interval": 0.5}
+```
+
+- `icl: true` = 用“参考录音 + 原话”做上下文学习，每句都锚定在同一段发音上，音色最稳、咬字最准。参考录音必须和要说的话是同一种语言——八千代只有日语原声，所以 `yachiyo/八千代` 用的参考是**她自己念过、经声纹和咬字双重挑选的一句中文**（“自参考”），日语原声只用来生成这句锚点。
+- 没有 `voice.json` 的音色只学音色向量（`yachiyo/综合`），每句独立采样，音色会有些飘。
+- 换了 `ref.wav` / `ref.txt` / `voice.json`，App 会自动把之前缓存的句子作废（缓存键里带音色指纹）。
+
+**调音色用的工具**（`Resources/localtts/`，都在这台 Mac 上离线跑）：
+
+- `tune_voice.py`：同一组中文句子用几十种合成设置各合成一遍（温度、采样、8 位/bf16、流式/一次性、ICL 自参考、声学码本单独降温……）。
+- `score_consistency.py`（用 `seedvc-venv`）：两个声纹模型（Resemblyzer + 中文训练的 CAM++）给每种设置打“句与句之间像不像”“和认可的声音像不像”“和真声像不像”，再加音高离散、生动程度、第一声延迟；同种子配对还能按 80 ms 码元对齐看流式解码器有没有在分块边界出瑕疵。
+- `asr_check.py`：Whisper 听写后按拼音和原文核对，普通话咬字是硬门槛。
+
+调音色时发现并修掉的 mlx-audio 问题：流式解码器在每个分块边界把反卷积偏置加了两次（每 0.48 秒一个小瑕疵，同种子对比相对误差中位数 16%）；`server.py` 启动时打补丁，修后流式输出和一次性解码逐样本一致。
+
+**设置 › 语音** 里也能换成系统自带语音，或者阿里云 Qwen 云端克隆音色（需要百炼 API Key，音色 ID 只在创建它的账号里能用）。克隆音色请仅用于个人娱乐。
 
 ## 七、游戏当天
 
@@ -167,12 +185,36 @@ Sources/AIDM/
   UI/                    剧本库、主持台、大屏、导入向导、剧本编辑器、设置
   Live2D/                Live2D DM 形象（WKWebView + PixiJS）
   Import/                OCR（Vision）与 AI 整理
-  Util/                  语音（系统 / 阿里云 Qwen 克隆音色）、二维码、钥匙串等
+  Util/                  语音（本机 Qwen3-TTS / 系统 / 阿里云云端音色）、二维码、钥匙串等
 Resources/
   web/                   手机端页面
   live2d/                Live2D 渲染页（PixiJS、pixi-live2d-display，均为 MIT）
+  localtts/              本机语音服务（server.py，Qwen3-TTS）、做音色和调音色的工具（prepare_voice / tune_voice / score_consistency / asr_check）
   Demo/                  示例剧本《听涛居》
 ```
 
 剧本格式（`script.yaml`）参考 `Resources/Demo/script.yaml`，用剧本编辑器改就不用碰 YAML。
 
+# git
+git status --untracked-files=all
+git rev-parse --show-toplevel
+git ls-files
+git check-ignore -v data/example.json
+open -e .gitignore
+git status --untracked-files=all
+git add .
+git status
+git commit -m "update"
+git push
+git lfs ls-files -s
+git lfs ls-files -n
+
+## 变更记录
+
+- 2026-10-06：补全 `.gitignore`，排除本机数据、模型权重、配置、虚拟环境与缓存，防止新增本地文件误入提交。
+- 2026-10-06：新增 `.gitattributes`，统一 Mac 启动脚本为 LF 换行、Windows 批处理为 CRLF 换行。
+- 2026-10-06：移除 README 中 `git` 标题末尾的多余空格，使 Git 空白检查通过。
+- 2026-10-06：取消 200 个模型、存档、OCR 输出、语音缓存和缓存日志路径的 Git 跟踪，并保留所有现存本地文件及原有暂存源码修改。
+- 2026-10-06：将已无当前 LFS 文件需求的 `.git/hooks/pre-push` 备份为 `pre-push.disabled-lfs`，解除缺少 `git-lfs` 时的本机推送钩子阻断。
+- 2026-10-06：在 README 末尾新增逐项变更记录，后续每次修改均追加一句摘要。
+- 2026-10-06：将两个未推送提交合并为不含新增 Git LFS 引用的提交，保留最终项目文件和本机模型，解决 GitHub GH008 推送拒绝。

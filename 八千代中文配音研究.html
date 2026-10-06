@@ -1,0 +1,341 @@
+<title>八千代中文配音研究</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Noto+Serif+SC:wght@400;600;700&family=Noto+Sans+SC:wght@400;500;700&family=JetBrains+Mono:wght@400;500&display=swap">
+<style>
+/* 版式：单栏学术论文，窄正文、宽表格；墨蓝主色取自录音棚调音台的指示灯，暖灰中性色 */
+:root{
+  --paper:#fafaf8; --ink:#1d2027; --muted:#5b616e; --rule:#d9dbe0; --panel:#f0f1f4;
+  --accent:#2f4b8f; --accent-soft:#e3e9f7; --good:#2e7d4f; --warn:#a4561b; --bad:#a3303b;
+  --bar:#2f4b8f; --bar2:#9aa6c4;
+  --serif:"Noto Serif SC","Songti SC","STSong",serif;
+  --sans:"Noto Sans SC","PingFang SC","Hiragino Sans GB",system-ui,sans-serif;
+  --mono:"JetBrains Mono","SF Mono",Menlo,monospace;
+}
+@media (prefers-color-scheme: dark){:root:not([data-theme="light"]){
+  --paper:#16181d; --ink:#e6e8ee; --muted:#a2a8b6; --rule:#30343d; --panel:#1f2229;
+  --accent:#9db4ef; --accent-soft:#25304a; --good:#6fca94; --warn:#e3a26b; --bad:#ef8a95;
+  --bar:#9db4ef; --bar2:#4c5672; color-scheme:dark }}
+:root[data-theme="dark"]{
+  --paper:#16181d; --ink:#e6e8ee; --muted:#a2a8b6; --rule:#30343d; --panel:#1f2229;
+  --accent:#9db4ef; --accent-soft:#25304a; --good:#6fca94; --warn:#e3a26b; --bad:#ef8a95;
+  --bar:#9db4ef; --bar2:#4c5672; color-scheme:dark }
+html{background:var(--paper)}
+body{background:var(--paper);color:var(--ink);font-family:var(--serif);font-size:17px;line-height:1.85;margin:0;padding:48px 20px 96px}
+.paper{max-width:760px;margin:0 auto}
+h1,h2,h3,h4{font-family:var(--sans);text-wrap:balance;line-height:1.35}
+h1{font-size:30px;font-weight:700;margin:0 0 12px;letter-spacing:.01em}
+.subtitle{font-family:var(--sans);font-size:17px;color:var(--muted);margin:0 0 20px}
+.meta{font-family:var(--sans);font-size:13.5px;color:var(--muted);border-top:1px solid var(--rule);border-bottom:1px solid var(--rule);padding-block:10px;display:flex;flex-wrap:wrap;gap:6px 22px}
+h2{font-size:21px;margin:52px 0 12px;padding-top:18px;border-top:1px solid var(--rule)}
+h3{font-size:17.5px;margin:30px 0 8px}
+h4{font-size:15.5px;margin:22px 0 6px;color:var(--muted)}
+p{margin:0 0 14px}
+.abstract{background:var(--panel);padding:20px 22px;margin:28px 0;border-radius:4px}
+.abstract h2{border:0;margin:0 0 6px;padding:0;font-size:16px;letter-spacing:.12em}
+.kw{font-family:var(--sans);font-size:14px;color:var(--muted);margin:10px 0 0}
+.toc{font-family:var(--sans);font-size:14.5px;columns:2;column-gap:28px;margin:8px 0 0;padding-left:18px}
+.toc a{color:var(--accent);text-decoration:none}.toc a:hover{text-decoration:underline}
+a{color:var(--accent)}
+.tbl{overflow-x:auto;margin:16px 0 8px}
+table{border-collapse:collapse;font-family:var(--sans);font-size:13.5px;line-height:1.5;min-width:100%;font-variant-numeric:tabular-nums}
+th,td{padding:7px 10px;border-bottom:1px solid var(--rule);text-align:left;vertical-align:top}
+th{font-weight:600;border-bottom:1.5px solid var(--ink);white-space:nowrap}
+td.n,th.n{text-align:right;white-space:nowrap}
+tr.hl td{background:var(--accent-soft)}
+.cap{font-family:var(--sans);font-size:13px;color:var(--muted);margin:4px 0 22px}
+.cap b{color:var(--ink)}
+.eq{font-family:var(--mono);font-size:14px;background:var(--panel);padding:12px 16px;border-radius:4px;overflow-x:auto;margin:10px 0 16px;white-space:pre}
+code{font-family:var(--mono);font-size:.86em;background:var(--panel);padding:1px 5px;border-radius:3px}
+.note{border-left:3px solid var(--accent);padding:4px 0 4px 16px;margin:18px 0;color:var(--ink)}
+.good{color:var(--good)}.bad{color:var(--bad)}.warn{color:var(--warn)}
+ol.refs{font-family:var(--sans);font-size:13.5px;line-height:1.6;padding-left:26px}
+ol.refs li{margin-bottom:6px;word-break:break-all}
+.fig{margin:22px 0 6px}
+.fig svg{width:100%;height:auto;display:block}
+.fig svg text{font-family:var(--sans);fill:var(--ink)}
+.fig svg .mut{fill:var(--muted)}
+.pipe{display:flex;flex-wrap:wrap;gap:10px;align-items:stretch;font-family:var(--sans);font-size:13.5px;margin:18px 0 6px}
+.pipe .st{flex:1 1 140px;min-width:0;border:1px solid var(--rule);border-radius:4px;padding:10px 12px;background:var(--panel)}
+.pipe .st b{display:block;font-size:14px;margin-bottom:2px}
+.pipe .ar{align-self:center;color:var(--muted)}
+.layers{display:grid;grid-template-columns:repeat(3,minmax(0,1fr));gap:10px;font-family:var(--sans);font-size:13.5px;margin:16px 0 6px}
+.layers div{border:1px solid var(--rule);border-radius:4px;padding:10px 12px;min-width:0}
+.layers b{display:block;font-size:14.5px}
+@media (max-width:560px){.layers{grid-template-columns:1fr}.toc{columns:1}body{font-size:16px}h1{font-size:25px}}
+@media (prefers-reduced-motion:reduce){*{scroll-behavior:auto}}
+</style>
+
+<article class="paper">
+<h1>动画角色的中文配音：在只有日语原声时分离韵律与音色</h1>
+<p class="subtitle">以《超かぐや姫！》月見ヤチヨ（八千代）为例的离线实时语音合成实验报告</p>
+<div class="meta"><span>项目：AI 剧本杀（Mac 本地 App）</span><span>硬件：Apple M4 · 16 GB</span><span>2026 年 10 月</span><span>性质：实验报告与方案，未全部实施</span></div>
+
+<section class="abstract">
+<h2>摘要</h2>
+<p>本文研究如何让一个只有约 5 分钟日语原声的动画角色，在一台 16 GB 内存的 Mac 上离线、实时地用标准普通话主持剧本杀。我们在两天内依次尝试了少样本微调（GPT-SoVITS）、零样本跨语种克隆（Qwen3-TTS 音色向量模式与上下文学习模式、Fish Audio S2-Pro、Confucius4-TTS）以及两段式“合成＋变声”（Seed-VC 普通版与保留音高版），共产生六十余种配置、上千条测试语音。客观评价使用两种声纹模型（CAM++、Resemblyzer）、Whisper 拼音错误率、音高曲线相关度与实时率；主观评价来自唯一的目标听众——项目使用者本人。</p>
+<p>结果表明：凡是“让模型照着参考录音重新念”的方法，都会把参考录音的<b>韵律</b>（语气起伏、节奏）与<b>音色</b>一起迁移。角色原声是夸张的动画台词，因此与角色越相似的配置，语气越“一惊一乍”；而使用者认可的“0 号”语气自然，恰恰因为它只从原声中提取了一个粗略的音色向量，代价是不像（声纹相似度 0.47，Confucius4 为 0.70，角色真声彼此之间约 0.53）。我们还发现并修正了 mlx-audio 0.5.7 流式解码器在分块边界重复叠加偏置的缺陷（边界处相对误差中位数由 16.3% 降至 0.0016%），以及我们自身评价体系把“稳定”误当作“像”的方向性错误。</p>
+<p>据此，本文提出将韵律与音色解耦的两段式方案：由 0 号负责内容、声调与语气，由一个保留源音音高曲线的变声模型只替换音色，并给出候选模型、实时管线、验证步骤与通过标准。</p>
+<p class="kw">关键词：跨语种语音克隆 · 韵律迁移 · 音色转换 · 零样本 TTS · 实时流式合成 · Apple Silicon</p>
+</section>
+
+<nav aria-label="目录"><ol class="toc">
+<li><a href="#s1">引言</a></li><li><a href="#s2">相关工作</a></li><li><a href="#s3">问题建模：三层分解</a></li><li><a href="#s4">数据与评价方法</a></li><li><a href="#s5">实验与结果</a></li><li><a href="#s6">讨论：为什么一直顾此失彼</a></li><li><a href="#s7">提出的方案</a></li><li><a href="#s8">验证计划与通过标准</a></li><li><a href="#s9">局限与伦理</a></li><li><a href="#s10">结论</a></li><li><a href="#refs">参考文献</a></li><li><a href="#appx">附录</a></li>
+</ol></nav>
+
+<h2 id="s1">1　引言</h2>
+<p>项目是一个运行在 Mac 上的 AI 剧本杀主持程序：大语言模型扮演 DM，Live2D 形象“八千代”在屏幕上讲话，玩家用手机加入。使用者对 DM 的声音提出了四个同时成立的要求：</p>
+<ol>
+<li><b>语气自然</b>：像使用者认可的“0 号”那样平稳，不一惊一乍；</li>
+<li><b>嗓音像八千代</b>：能被认出是这个角色；</li>
+<li><b>普通话准确</b>：咬字、声调正确，没有日语腔（早期试验中“选择自己”被念成“显则智己”）；</li>
+<li><b>实时</b>：AI 写完一句，1 秒内开口，合成速度不低于说话速度。</li>
+</ol>
+<p>约束条件同样严格：全部离线运行；硬件为 Apple M4、16 GB 统一内存，没有 NVIDIA 显卡；角色只有日语原声，从使用者提供的素材中提取、分离背景音乐并经声纹筛选后，可用的干净语音为 93 句、共 299 秒；角色没有官方中文配音。</p>
+<p>本文的贡献有四点：（1）系统记录了各类方法在这一场景下的客观指标与使用者的主观判断；（2）用“内容—韵律—音色”三层分解解释了为什么这些方法总是顾此失彼；（3）定位并修正了一个实际影响听感的流式解码缺陷；（4）提出一个韵律与音色解耦的两段式方案及其验证计划。</p>
+
+<h2 id="s2">2　相关工作</h2>
+<h3>2.1　零样本与跨语种语音克隆</h3>
+<p><b>Qwen3-TTS</b>（阿里通义，2026）是一个以 12.5 Hz 离散语音码为输出的大语言模型式 TTS，支持两种克隆方式：只用参考录音提取的说话人向量（x-vector，本文称“音色向量模式”），或同时提供参考录音和它的逐字稿进行上下文学习（ICL）。官方说明 ICL 克隆质量更高，但社区报告参考录音语言与输出语言不同时更容易出现“换人”与口音渗入 [4][5]。其技术报告还声称，用单一语言数据做说话人微调后，音色可以泛化到其它语言 [3]。</p>
+<p><b>Confucius4-TTS</b>（网易有道，2026，Apache-2.0）专为无需逐字稿的跨语种克隆设计，使用可学习的说话人编码器，论文报告其日语参考到中文输出的错误率远低于 CosyVoice 2 [6]。<b>IndexTTS 2.5</b> 与 <b>CosyVoice 3</b> 也报告了较强的跨语种说话人保持能力，后者通过将日文字符转写为假名解决了中日汉字重叠导致的混淆 [7][8]。<b>Fish Audio S2-Pro</b> 是开源的大型 TTS，社区平台上已有约 30 个八千代“快速克隆”声音，均由日语片段直接生成。</p>
+<h3>2.2　少样本微调</h3>
+<p><b>GPT-SoVITS</b> 是中文社区最常用的少样本克隆工具，宣称支持跨语种推理 [9]。但当训练数据只有日语时，模型同时学到了日语的发音习惯。</p>
+<h3>2.3　变声（音色转换）</h3>
+<p>变声模型不生成新内容，只把一段语音的音色换成目标说话人。<b>Seed-VC</b> 基于扩散 Transformer，支持零样本与微调，提供带音高条件的 44.1 kHz 模型与 2500 万参数的实时小模型（官方实时率 0.069，延迟约 430 ms）[10][11]。<b>RVC</b>（检索式变声）是中文社区“AI 配音/翻唱”的事实标准，设计上保留源音音高，只替换音色，有面向 Apple Silicon 的版本 [12]。</p>
+
+<h2 id="s3">3　问题建模：三层分解</h2>
+<p>为讨论方便，把一句话的声音分为三层：</p>
+<div class="layers">
+<div><b>内容</b>说的是哪些字，每个字的拼音与声调是否正确。</div>
+<div><b>韵律（语气）</b>音高如何起伏、语速、停顿位置、情绪强弱。“自然”“一惊一乍”都描述这一层。</div>
+<div><b>音色</b>同样的话、同样的语气换一个人说时不同的那部分；“像不像”主要描述这一层。</div>
+</div>
+<p class="cap"><b>图 1</b>　声音的三层分解。普通话的声调同时属于内容与韵律：声调是由音高曲线的形状承载的。</p>
+<p>零样本 TTS 可以抽象为条件生成：</p>
+<div class="eq">x ~ p( x | 文本 t , 参考 r )        r 同时提供韵律线索 φ(r) 与音色线索 ψ(r)</div>
+<p>模型从参考中拿得越多（例如 ICL 直接注意参考的语音码），生成结果在音色上越接近 r，但韵律也越接近 r。音色向量模式只取一个全局摘要 ψ(r)，韵律主要由模型自身的先验决定。当 r 是夸张的动画台词时，这就构成一个无法用调参绕开的取舍：<b>像</b>与<b>语气正常</b>在同一个旋钮的两端。</p>
+<p>变声则是另一种分解：</p>
+<div class="eq">x = VC( s , 目标音色 )        s = 源语音（决定内容与韵律）</div>
+<p>若 VC 保留 s 的音高曲线，那么内容、声调与语气全部来自 s，只有音色被替换。这正是“0 号的语气＋八千代的嗓音”在形式上的定义。</p>
+
+<h2 id="s4">4　数据与评价方法</h2>
+<h3>4.1　数据</h3>
+<p>从使用者提供的视频素材中提取 44.1 kHz 音频，用 UVR5 分离人声与伴奏；用 Whisper large-v3-turbo 切句转写；以几段确认是本人的片段的 ERes2NetV2 声纹为中心，剔除其它角色的句子，得到 93 句、299 秒（单句 1.3–6.7 秒）。测试文本为 16 句主持词（8 句调参集、8 句保留集）和 5 句长短句压力测试（最长 90 字、最短 1 字）。</p>
+<h3>4.2　客观指标</h3>
+<div class="tbl"><table>
+<thead><tr><th>指标</th><th>含义</th><th>计算</th></tr></thead>
+<tbody>
+<tr><td>像她</td><td>与角色真声的相似度</td><td>CAM++（中文训练）声纹余弦，对 93 句真声的平均声纹；参考值：真声彼此平均 0.527</td></tr>
+<tr><td>句间一致</td><td>同一配置不同句子是否像同一个人</td><td>16 句两两声纹余弦的平均值与第 10 百分位</td></tr>
+<tr><td>像 0 号</td><td>与使用者认可声音的相似度</td><td>对 0 号 16 句的平均声纹；0 号自身用留一法</td></tr>
+<tr><td>咬字</td><td>普通话是否准确</td><td>Whisper 听写→繁转简、数字转汉字、“两/二”归一→拼音编辑距离；同时计不含/含声调两种错误率</td></tr>
+<tr><td>声调保真</td><td>变声后声调是否被改</td><td>RMVPE 提取源音与输出的音高曲线（半音），浊音帧相关系数</td></tr>
+<tr><td>语气起伏</td><td>“生动”或“夸张”程度</td><td>句内音高标准差（半音）</td></tr>
+<tr><td>速度</td><td>能否实时</td><td>实时率 RTF＝计算时间÷语音时长；首个可闻样本时间</td></tr>
+</tbody></table></div>
+<p class="cap"><b>表 1</b>　客观指标。声纹计算前按 Resemblyzer 的要求做 −30 dBFS 音量归一与静音裁剪；早期轮次未做此处理，其数值与后期不可直接比较（见 5.3 节注）。</p>
+<h3>4.3　统计方法与评价流程的自检</h3>
+<p>每个决赛配置用两个随机种子各合成 16 句，合并为 32 句做配对自助法检验。种子间差异给出噪声下限：句间一致约 ±0.02，第 10 百分位约 ±0.05，小于此的差异视为噪声。评价脚本本身经过两名审查代理的对抗式审查，修正了：Resemblyzer 1 秒窗口中 37.5% 为补零、未做音量归一导致排序改变、锚点句与测试句重复造成的循环加分、Whisper 输出繁体使“还原”被读作 hai yuan 而误判等问题。</p>
+<h3>4.4　主观评价</h3>
+<p>唯一的目标听众是使用者本人。每轮把同样 6–8 句拼成一段试听发送，记录原话反馈。第 6 节将说明：客观指标与主观判断的偏离，正是本研究最重要的发现之一。</p>
+
+<h2 id="s5">5　实验与结果</h2>
+<h3>5.1　少样本微调：GPT-SoVITS</h3>
+<p>用 93 句日语训练 GPT-SoVITS v2ProPlus。音色接近，但普通话带明显日语口音，“选择自己的角色吧”被听成“显则智己的角色吧”。使用者终止了该路线。原因与第 3 节一致：训练数据只有日语，模型把日语的发音习惯当作“她的说话方式”一并学去。</p>
+
+<h3>5.2　零样本跨语种克隆</h3>
+<div class="tbl"><table>
+<thead><tr><th>方法</th><th class="n">像她</th><th class="n">句间一致</th><th class="n">咬字</th><th class="n">RTF</th><th>使用者反馈</th></tr></thead>
+<tbody>
+<tr class="hl"><td>Qwen3-TTS 音色向量模式（“0 号”，bf16，非流式）</td><td class="n">0.466</td><td class="n">0.680</td><td class="n">15/16</td><td class="n">1.08</td><td>普通话最标准、语气最正常；但不像</td></tr>
+<tr><td>Fish S2-Pro（日语参考直接念中文）</td><td class="n">—</td><td class="n">—</td><td class="n bad">错误率 10%</td><td class="n">≈3</td><td>“侦探”→“健谈”，“八千代”→“巴青太”</td></tr>
+<tr><td>Confucius4-TTS（真声 12 秒参考）</td><td class="n good">0.702</td><td class="n">0.751</td><td class="n">16/16</td><td class="n bad">7.2</td><td>一惊一乍</td></tr>
+</tbody></table></div>
+<p class="cap"><b>表 2</b>　零样本方法。0 号唯一稳定的错误是把“推理”念成“催理”，属于日语腔残留。Confucius4 的句内语气起伏（3.56 半音）与句间音高离散（3.19 半音，0 号为 2.04）都更大，与“一惊一乍”的主观描述一致。</p>
+
+<h3>5.3　两段式：合成＋变声（Seed-VC）</h3>
+<p>以中文 TTS 生成源音，再用 Seed-VC 在 93 句上微调 600 步后变声。先使用不带音高条件的 22 kHz 模型，再换成带音高条件的 44.1 kHz 模型（声调版）。</p>
+<div class="tbl"><table>
+<thead><tr><th>源音 → 变声模型</th><th class="n">像她*</th><th class="n">声调保真</th><th class="n">咬字错误</th><th>使用者反馈</th></tr></thead>
+<tbody>
+<tr><td>0 号原声（不变声，对照）</td><td class="n">0.537</td><td class="n">—</td><td class="n">0%</td><td>标准但不像</td></tr>
+<tr><td>动漫少女音（声音设计）→ 普通版</td><td class="n">0.819</td><td class="n warn">0.917</td><td class="n">0%</td><td>更像，但声调怪</td></tr>
+<tr><td>0 号 → 普通版</td><td class="n">0.799</td><td class="n warn">0.940</td><td class="n">0%</td><td>—</td></tr>
+<tr><td>Fish → 普通版</td><td class="n">0.829</td><td class="n">0.922</td><td class="n bad">19.4%</td><td>保留了日语口音</td></tr>
+<tr class="hl"><td>0 号 → 声调版（第 300 步，8 步扩散）</td><td class="n">0.769</td><td class="n good">0.994</td><td class="n">0%</td><td>未明确评价；之后选择“全部用 0 号”</td></tr>
+</tbody></table></div>
+<p class="cap"><b>表 3</b>　变声实验。*此轮使用早期评分口径（未做音量归一与静音裁剪），真声对自身中心的中位数为 0.763，数值只能在本表内比较。普通版扩散模型会自行生成音高，学到的是日语语调，声调保真度 0.92–0.94，正对应“声调怪”；声调版直接沿用源音音高曲线，保真度 0.99。声调版 8 步扩散的 RTF 为 2.06，25 步为 5.8。</p>
+<p>该轮训练中还遇到两处工程问题：带音高模型在 Apple GPU 上训练时内存从 11 GB 涨到 38 GB（原因是 RMVPE 的 GRU 在 MPS 上泄漏，以及每种新张量长度都缓存一份计算图），通过把音高提取移到 CPU、把批次长度取整到固定档位解决。</p>
+
+<h3>5.4　稳定性调校：Qwen3-TTS 自参考上下文学习</h3>
+<p>使用者反馈“读的时候音色有变化”。分析发现两个原因。</p>
+<p><b>（1）流式解码缺陷。</b>mlx-audio 0.5.7 的 <code>DecoderBlockUpsample.step</code> 在重叠相加时，缓存的溢出部分已经包含转置卷积的偏置，下一块又加了一次。用同一随机种子对比流式与一次性解码，按 80 ms 码元对齐后，误差集中在每个 0.48 秒分块的第一个码元：</p>
+<div class="tbl"><table>
+<thead><tr><th>块内位置（码元）</th><th class="n">0（边界）</th><th class="n">1</th><th class="n">2</th><th class="n">3</th><th class="n">4</th><th class="n">5</th></tr></thead>
+<tbody>
+<tr><td>修复前相对误差中位数</td><td class="n bad">0.163</td><td class="n">0.012</td><td class="n">0.0024</td><td class="n">0.00002</td><td class="n">0.00002</td><td class="n">0.00002</td></tr>
+<tr><td>修复后</td><td class="n good">0.000016</td><td class="n">0.000015</td><td class="n">0.000017</td><td class="n">0.000016</td><td class="n">0.000016</td><td class="n">0.000017</td></tr>
+</tbody></table></div>
+<p class="cap"><b>表 4</b>　流式解码缺陷。修复前边界处第 90 百分位误差达 0.60，即每秒约两次的短暂失真；修复后流式输出与一次性解码逐样本一致。</p>
+<p><b>（2）每句独立采样。</b>音色向量模式下每句只有一个全局向量作为锚，其余全部重新采样。改为上下文学习，并以“这个声音自己念过、经声纹与 Whisper 挑选的一句中文”作为参考（自参考），中文参考避免了日语口音渗入。三轮共 41 个配置，决赛结果如下：</p>
+<div class="tbl"><table>
+<thead><tr><th>配置（两种子）</th><th class="n">句间一致</th><th class="n">第 10 百分位</th><th class="n">像 0 号</th><th class="n">像她</th><th class="n">咬字</th><th class="n">开口</th></tr></thead>
+<tbody>
+<tr><td>0 号（基线）</td><td class="n">0.680</td><td class="n">0.579</td><td class="n">0.812</td><td class="n">0.466</td><td class="n">15/16</td><td class="n">5.2 s</td></tr>
+<tr><td>音色向量，温度 0.4</td><td class="n">0.709 / 0.696</td><td class="n">0.638 / 0.581</td><td class="n">0.824</td><td class="n">0.40–0.42</td><td class="n">15/16</td><td class="n">0.63 s</td></tr>
+<tr class="hl"><td>自参考 ICL，温度 0.4，重复惩罚 1.1</td><td class="n">0.831 / 0.837</td><td class="n">0.779 / 0.776</td><td class="n">0.844</td><td class="n bad">0.404</td><td class="n">16/16</td><td class="n">0.60 s</td></tr>
+<tr><td>自参考 ICL，温度 0.7</td><td class="n">0.755 / 0.820</td><td class="n bad">0.329 / 0.740</td><td class="n">0.813</td><td class="n">0.38–0.42</td><td class="n">16/16</td><td class="n">0.60 s</td></tr>
+</tbody></table></div>
+<p class="cap"><b>表 5</b>　稳定性调校决赛。温度 0.7 的一个种子出现一句“换人”（与其它句相似度 0.27）。由三名评审代理分别从统计、保真、工程角度评审后选定第三行上线；它在所有“稳定”指标上最好，但“像她”最低。</p>
+<p>上线后使用者的反馈是“不像八千代”。回看表 5，问题已在数据中：我们优化的是“稳定”和“像 0 号”，而“像她”这一列从 0.466 降到了 0.404。</p>
+
+<h3>5.5　Confucius4-TTS 与混合尝试</h3>
+<p>根据网络调研引入 Confucius4。它用真声直接作参考，“像她”达到 0.702，高于真声彼此之间的 0.527，咬字 16/16，但速度远不能实时。逐阶段剖析一句 5.6 秒的语音：</p>
+<div class="tbl"><table>
+<thead><tr><th>设置</th><th class="n">文本→语音码</th><th class="n">音色（扩散）</th><th class="n">声码器</th><th class="n">合计</th><th class="n">RTF</th></tr></thead>
+<tbody>
+<tr><td>原始（12 秒提示，25 步）</td><td class="n">5.40</td><td class="n">11.23</td><td class="n">3.99</td><td class="n">20.62</td><td class="n bad">3.66</td></tr>
+<tr><td>12 秒提示，10 步</td><td class="n">3.84</td><td class="n">5.81</td><td class="n">4.02</td><td class="n">13.68</td><td class="n">2.43</td></tr>
+<tr><td>5 秒提示，10 步</td><td class="n">4.43</td><td class="n">3.61</td><td class="n">4.88</td><td class="n">12.91</td><td class="n">2.29</td></tr>
+<tr class="hl"><td>3 秒提示，8 步，半精度声码器</td><td class="n">5.10</td><td class="n">2.53</td><td class="n">4.03</td><td class="n">11.65</td><td class="n">2.07</td></tr>
+</tbody></table></div>
+<p class="cap"><b>表 6</b>　Confucius4 速度剖析（秒）。三个阶段各占三到五秒，没有单一瓶颈；剩余的 2 倍差距在本机上难以靠参数消除。</p>
+<p>混合尝试：用 Confucius4 念的中文句子作为 Qwen3-TTS 的自参考，得到实时（开口 0.6 秒）且“像她”0.527–0.540 的结果，咬字 14–16/16。使用者对 Confucius4 及其混合版的反馈是“有点一惊一乍”。</p>
+
+<div class="fig" role="img" aria-label="各方法与角色真声的相似度条形图">
+<svg viewBox="0 0 720 300" xmlns="http://www.w3.org/2000/svg">
+  <g font-size="13">
+    <!-- 比例尺：0 → x=210，0.8 → x=690，每 0.1 = 60px -->
+    <line x1="210" y1="20" x2="210" y2="250" stroke="var(--rule)" stroke-width="1"/>
+    <g class="mut" font-size="11">
+      <text x="210" y="270" text-anchor="middle" class="mut">0</text>
+      <text x="330" y="270" text-anchor="middle" class="mut">0.2</text>
+      <text x="450" y="270" text-anchor="middle" class="mut">0.4</text>
+      <text x="570" y="270" text-anchor="middle" class="mut">0.6</text>
+      <text x="690" y="270" text-anchor="middle" class="mut">0.8</text>
+    </g>
+    <line x1="526.2" y1="14" x2="526.2" y2="252" stroke="var(--warn)" stroke-dasharray="4 4" stroke-width="1.2"/>
+    <text x="530" y="290" class="mut" font-size="11.5">真声彼此 0.527</text>
+    <text x="200" y="47" text-anchor="end">现在的 App（自参考 ICL）</text>
+    <rect x="210" y="34" width="242.4" height="20" fill="var(--bar2)"/>
+    <text x="458" y="49" font-size="12">0.404</text>
+    <text x="200" y="91" text-anchor="end">0 号（使用者认可）</text>
+    <rect x="210" y="78" width="279.6" height="20" fill="var(--bar2)"/>
+    <text x="496" y="93" font-size="12">0.466</text>
+    <text x="200" y="135" text-anchor="end">Qwen＋Confucius4 参考</text>
+    <rect x="210" y="122" width="316.2" height="20" fill="var(--bar2)"/>
+    <text x="532" y="137" font-size="12">0.527</text>
+    <text x="200" y="179" text-anchor="end">Confucius4（真声参考）</text>
+    <rect x="210" y="166" width="421.2" height="20" fill="var(--bar)"/>
+    <text x="637" y="181" font-size="12">0.702</text>
+    <text x="200" y="223" text-anchor="end" class="mut">语气自然度（主观）</text>
+    <text x="216" y="223" class="mut" font-size="12">0 号 ＞ 现在的 App ＞ 混合 ≈ Confucius4（一惊一乍）</text>
+  </g>
+</svg>
+</div>
+<p class="cap"><b>图 2</b>　各方法与角色真声的声纹相似度（CAM++，统一口径）。越像她的方法，主观上语气越不正常，这是第 3 节所述取舍的直接体现。</p>
+
+<h3>5.6　使用者反馈时间线</h3>
+<div class="tbl"><table>
+<thead><tr><th>阶段</th><th>方法</th><th>原话</th></tr></thead>
+<tbody>
+<tr><td>1</td><td>Qwen 零样本</td><td>“不是那么像”“一点也不像”</td></tr>
+<tr><td>2</td><td>GPT-SoVITS 微调</td><td>“咬字不清……听着像‘显则智己’”</td></tr>
+<tr><td>3</td><td>Seed-VC 零样本</td><td>“还是不像”</td></tr>
+<tr><td>4</td><td>Seed-VC 微调（普通版）</td><td>“0 号普通话最标准，但不是很像”；“更像，但声调怪”</td></tr>
+<tr><td>5</td><td>Seed-VC 声调版</td><td>“算了我们全部使用 0 吧”</td></tr>
+<tr><td>6</td><td>0 号实时版</td><td>“读的时候音色有变化”</td></tr>
+<tr><td>7</td><td>自参考 ICL 调校</td><td>“问题是不像八千代”</td></tr>
+<tr><td>8</td><td>Confucius4 及混合</td><td>“有点一惊一乍……0 号语气最正常，但是不像”</td></tr>
+</tbody></table></div>
+<p class="cap"><b>表 7</b>　主观反馈。第 4 条与第 8 条合起来，就是本文的问题定义：要 0 号的语气，要她的嗓音。</p>
+
+<h2 id="s6">6　讨论：为什么一直顾此失彼</h2>
+<h3>6.1　“重新念”的方法无法同时满足语气与相似度</h3>
+<p>表 2、表 5 与图 2 共同显示：从参考中拿得越多，越像她，也越像她在动画里的语气。Confucius4 与 ICL 都直接利用参考的声学细节，因此韵律一并迁移；音色向量模式只取全局摘要，韵律由模型先验决定，所以 0 号语气自然却不像。这不是参数没调好，而是方法结构决定的。</p>
+<h3>6.2　评价体系的方向性错误</h3>
+<p>第 5.4 节的调校以“句间一致”和“像 0 号”为主要目标。这两项都会奖励平稳，甚至奖励平淡（评审代理已指出句间一致与韵律变化负相关）。“像她”本该是首要约束，却只作为参考列出。结果是一个更稳定、但更不像的版本被选中上线。教训是：目标必须由使用者的原话直接定义，客观指标只用来在候选之间排序，不能替代目标本身。</p>
+<h3>6.3　跨语言声纹相似度的局限</h3>
+<p>“像她”是用中文语音和日语真声比较得出的，语言差异本身会压低分数：真声彼此之间也只有 0.527。因此它适合做相对比较，不能作为“像不像”的绝对答案；最终裁决仍需使用者听感。</p>
+<h3>6.4　两段式的优势与代价</h3>
+<p>变声在结构上把韵律交给源音、把音色交给目标模型，恰好匹配需求。表 3 证明了两点：保留音高曲线的变声能做到声调保真 0.99；不保留音高的变声会改坏声调。剩下的问题是速度：声调版 8 步时 RTF 约 2.1。</p>
+
+<h2 id="s7">7　提出的方案</h2>
+<h3>7.1　主方案：0 号负责说，变声负责嗓子</h3>
+<div class="pipe">
+<div class="st"><b>大模型 DM</b>流式写出一句</div><div class="ar">→</div>
+<div class="st"><b>0 号（Qwen3-TTS）</b>音色向量模式，流式；决定内容、声调、语气；首块约 0.3 s</div><div class="ar">→</div>
+<div class="st"><b>变声器</b>保留音高曲线，0.3–0.5 s 一块替换音色</div><div class="ar">→</div>
+<div class="st"><b>播放＋Live2D 口型</b>首声目标 &lt; 1 s</div>
+</div>
+<p class="cap"><b>图 3</b>　两段式实时管线。任何一段失败时退回 0 号原声，保证每句都念出来。</p>
+<h3>7.2　变声器候选</h3>
+<div class="tbl"><table>
+<thead><tr><th>候选</th><th>优点</th><th>缺点与风险</th></tr></thead>
+<tbody>
+<tr><td>A1　Seed-VC 声调版（已训练，模型可恢复）</td><td>质量与声调保真已验证（0.994）；无需重新训练</td><td>RTF≈2；需降步数、分块流式、预计算参考特征；降步数可能使嗓音变糊</td></tr>
+<tr><td>A2　RVC v2</td><td>设计目标即“保留音高、只换音色”；速度快、可实时；中文社区动画角色配音的标准做法</td><td>需重新训练（约 0.5–2 小时）与下载预训练文件（约 0.5–1 GB）；可能有轻微电音；MPS 训练稳定性待验证</td></tr>
+<tr><td>A3　Seed-VC 实时小模型（2500 万参数）</td><td>官方 RTF 0.069、延迟约 430 ms</td><td>需确认是否保留源音音高；小模型相似度可能不足；需微调</td></tr>
+</tbody></table></div>
+<p class="cap"><b>表 8</b>　变声器候选。</p>
+<h3>7.3　备选方案：以变声结果微调 Qwen3-TTS</h3>
+<p>若变声器无法实时，可离线用主方案生成 300–500 句“0 号语气＋她的嗓音”的中文，作为 Qwen3-TTS 说话人微调的训练数据。训练数据本身是中文且语气来自 0 号，因此不会引入日语口音和夸张语气；微调后单模型即可实时合成（RTF≈0.7）。代价是：官方脚本全量微调 1.7B 模型需 20 GB 以上内存，须改为 0.6B 模型或 LoRA；生成加训练约 3–5 小时。</p>
+<h3>7.4　不推荐的方向</h3>
+<p>继续在“重新念”的路线上调整参考句、温度或 ICL 参数（第 6.1 节）；直接上线 Confucius4（RTF 7.2 且语气夸张）。若仍想尝试 Confucius4，可选用真声中语气平静的片段作为参考，但无法解决速度问题。</p>
+
+<h2 id="s8">8　验证计划与通过标准</h2>
+<div class="tbl"><table>
+<thead><tr><th>步骤</th><th>内容</th><th>通过标准</th></tr></thead>
+<tbody>
+<tr><td>0</td><td>使用者听“0 号原话、只换嗓子”的试听，判断方向；若嗓音不够像，说明差在哪（偏低、发闷、不够亮等）</td><td>语气与 0 号一致，嗓音明显更像</td></tr>
+<tr><td>1</td><td>统一口径重新评分 0 号、声调版、Confucius4、现行版；新增语气保真（音高曲线相关、语速比、停顿一致性）</td><td>语气保真 ≥ 0.98；像她 ≥ 0.6；咬字 16/16</td></tr>
+<tr><td>2</td><td>同一批 0 号源音分别用 A1（8/6/4 步）、A2、A3 变声，盲听 2 个候选</td><td>使用者在盲听中选出满意版本</td></tr>
+<tr><td>3</td><td>实时性：分块流式延迟、接缝杂音、连续 300 句内存与速度、与 Live2D 和大模型并行运行</td><td>首声 &lt; 1 s；RTF &lt; 0.8；2 小时不变慢</td></tr>
+<tr><td>4</td><td>接入 App：两服务串联、失败回退 0 号、缓存键含变声模型指纹、设置可切换</td><td>每句都念出；切换即时生效</td></tr>
+<tr><td>5</td><td>真实对局验收</td><td>使用者认可</td></tr>
+</tbody></table></div>
+<p class="cap"><b>表 9</b>　验证步骤。若第 2、3 步证明没有变声器能实时，则转入 7.3 节备选方案。</p>
+
+<h2 id="s9">9　局限与伦理</h2>
+<p><b>局限。</b>测试集只有 16 句加 5 句压力测试，分辨率约为句间一致 ±0.02；主观评价只来自一名听众；跨语言声纹相似度存在系统性偏低；声调版的相似度来自早期评分口径，尚未在统一口径下复测；Whisper 的语言模型会“纠正”轻微误读，咬字全对不等于发音完美。</p>
+<p><b>伦理与版权。</b>角色声音属于原作与配音演员。本研究的数据、模型与生成语音仅用于使用者个人娱乐，不公开发布、不用于商业用途；项目仓库中的原始素材与模型均不上传。所用模型的许可各不相同（Qwen3-TTS、Confucius4 为 Apache-2.0，Fish S2-Pro 为研究许可），若用途改变需重新核对。</p>
+
+<h2 id="s10">10　结论</h2>
+<p>在只有日语原声的条件下，要求“语气像 0 号、嗓音像八千代”，本质上要求把韵律与音色分开处理。实验证明，零样本克隆与上下文学习都会把参考录音的夸张语气连同音色一起迁移，因此在“像”与“自然”之间无法两全；而保留音高曲线的变声可以做到声调保真 0.99，只替换音色。本文建议以 0 号负责内容与语气、以变声模型负责音色，先由使用者确认方向，再比较三个变声候选的速度与听感；若无法实时，则以变声结果为训练数据微调 Qwen3-TTS。研究过程中也暴露了评价体系的偏差：客观指标必须服从使用者对目标的原话定义。</p>
+
+<h2 id="refs">参考文献</h2>
+<ol class="refs">
+<li>QwenLM. Qwen3-TTS（代码与模型）. <a href="https://github.com/QwenLM/Qwen3-TTS">github.com/QwenLM/Qwen3-TTS</a></li>
+<li>QwenLM. Qwen3-TTS 微调脚本. <a href="https://github.com/QwenLM/Qwen3-TTS/tree/main/finetuning">github.com/QwenLM/Qwen3-TTS/tree/main/finetuning</a></li>
+<li>Qwen Team. Qwen3-TTS Technical Report. <a href="https://arxiv.org/pdf/2601.15621">arxiv.org/pdf/2601.15621</a></li>
+<li>Qwen3-TTS Issue #80：Base model voice clone sometimes change speaker. <a href="https://github.com/QwenLM/Qwen3-TTS/issues/80">github.com/QwenLM/Qwen3-TTS/issues/80</a></li>
+<li>ocdevel. Qwen3-TTS Voice Cloning Guide 2026. <a href="https://ocdevel.com/blog/20260302-qwen-tts-voice-cloning">ocdevel.com/blog/20260302-qwen-tts-voice-cloning</a></li>
+<li>Confucius4-TTS: Transcript-Free Cross-Lingual Zero-Shot TTS with a Learnable Speaker Encoder. <a href="https://arxiv.org/pdf/2608.11650">arxiv.org/pdf/2608.11650</a>；模型 <a href="https://huggingface.co/netease-youdao/Confucius4-TTS">huggingface.co/netease-youdao/Confucius4-TTS</a></li>
+<li>IndexTTS 2.5 Technical Report. <a href="https://arxiv.org/pdf/2601.03888">arxiv.org/pdf/2601.03888</a></li>
+<li>CosyVoice 3: Towards In-the-wild Speech Generation via Scaling-up and Post-training. <a href="https://arxiv.org/pdf/2505.17589">arxiv.org/pdf/2505.17589</a></li>
+<li>RVC-Boss. GPT-SoVITS. <a href="https://github.com/RVC-Boss/GPT-SoVITS">github.com/RVC-Boss/GPT-SoVITS</a></li>
+<li>Plachtaa. Seed-VC. <a href="https://github.com/plachtaa/seed-vc">github.com/plachtaa/seed-vc</a>；评测 <a href="https://gitcode.com/GitHub_Trending/se/seed-vc/blob/main/EVAL.md">EVAL.md</a></li>
+<li>Zero-shot Voice Conversion with Diffusion Transformers. <a href="https://arxiv.org/abs/2411.09943">arxiv.org/abs/2411.09943</a></li>
+<li>RVC WebUI for macOS (Apple Silicon). <a href="https://github.com/NevilPatel01/RVC-WebUI-MacOS">github.com/NevilPatel01/RVC-WebUI-MacOS</a></li>
+<li>Blaizzy. mlx-audio（Apple Silicon 上的语音模型推理库，0.5.7）. <a href="https://github.com/Blaizzy/mlx-audio">github.com/Blaizzy/mlx-audio</a></li>
+</ol>
+
+<h2 id="appx">附录</h2>
+<h3>A　现行与候选配置</h3>
+<div class="tbl"><table>
+<thead><tr><th>名称</th><th>参数</th></tr></thead>
+<tbody>
+<tr><td>0 号</td><td>Qwen3-TTS-12Hz-1.7B-Base；参考 27.5 秒日语拼接；只用音色向量；温度 0.7；bf16 非流式（实时版为 8 位流式）</td></tr>
+<tr><td>现行 App</td><td>同模型 8 位；自参考 ICL（6.4 秒中文）；温度 0.4，top_k 50，重复惩罚 1.1；0.5 秒流式；含解码修复</td></tr>
+<tr><td>声调版变声</td><td>Seed-VC 44.1 kHz 带音高模型，在 93 句上微调 300 步；音高按中位数平移到她的音域；8 步扩散</td></tr>
+<tr><td>Confucius4</td><td>int8 权重；真声 12 秒参考；温度 0.8；25 步（优化后 3 秒提示、8 步、半精度声码器）</td></tr>
+</tbody></table></div>
+<h3>B　文件位置</h3>
+<div class="tbl"><table>
+<tbody>
+<tr><td>试听样本</td><td><code>data/试听/</code></td></tr>
+<tr><td>声调版变声模型</td><td><code>data/LocalTTS/restore/训练存档/八千代声调版/</code></td></tr>
+<tr><td>真声 93 句</td><td><code>data/LocalTTS/voices/yachiyo/dataset/</code></td></tr>
+<tr><td>评分与调参工具</td><td><code>Resources/localtts/</code>：tune_voice.py、score_consistency.py、asr_check.py、confucius_fast.py</td></tr>
+<tr><td>原始测量数据</td><td><code>data/LocalTTS/voices/yachiyo/tune/</code>：scores*.json、asr*.json、timing.json</td></tr>
+</tbody></table></div>
+</article>

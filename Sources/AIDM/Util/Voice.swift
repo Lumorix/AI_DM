@@ -37,13 +37,13 @@ struct VoiceSettings: Codable, Equatable {
         switch engine {
         case .system: false
         case .qwen: !voice.isEmpty && !model.isEmpty
-        case .local: LocalTTS.voiceExists(localVoice) && (LocalTTS.isSoVITS(localVoice) ? SoVITSService.isInstalled : LocalTTS.isInstalled)
+        case .local: LocalTTS.isUsable(localVoice)
         }
     }
 
     /// 缓存用的“音色身份”：换了音色/模型就是另一套录音
     var cacheIdentity: String {
-        engine == .local ? "local|\(LocalTTS.modelName)|\(localVoice)" : "\(model)|\(voice)|\(language)"
+        engine == .local ? "local|\(LocalTTS.modelName)|\(localVoice)|\(LocalTTS.fingerprint(localVoice))" : "\(model)|\(voice)|\(language)"
     }
 }
 
@@ -185,6 +185,129 @@ final class ClipPlayer: NSObject, AVAudioPlayerDelegate {
     }
 }
 
+// MARK: - 边收边放：本机语音一边合成一边播放，第一段声音到了就开口
+
+/// 播放时的音量（给 Live2D 对口型），在音频线程里算、主线程里读
+final class LevelMeter: @unchecked Sendable {
+    private let lock = NSLock()
+    private var v: Float = 0
+
+    var value: Float { lock.lock(); defer { lock.unlock() }; return v }
+
+    func update(_ buf: AVAudioPCMBuffer) {
+        guard let d = buf.floatChannelData?[0], buf.frameLength > 0 else { return }
+        let n = Int(buf.frameLength)
+        var sum: Float = 0
+        for i in 0..<n { sum += d[i] * d[i] }
+        let db = 20 * log10(max(sqrt(sum / Float(n)), 1e-6))
+        let level = max(0, min(1, (db + 45) / 40))
+        lock.lock(); v = level; lock.unlock()
+    }
+}
+
+@MainActor
+final class StreamPlayer {
+    private let engine = AVAudioEngine()
+    private let node = AVAudioPlayerNode()
+    private var format: AVAudioFormat?
+    private var pending = 0
+    private var generation = 0
+    private let meter = LevelMeter()
+
+    var level: Float { pending > 0 ? meter.value : 0 }
+    /// 排队的声音都放完了
+    var isIdle: Bool { pending == 0 }
+    /// 命令行测试用：静音播放
+    var muted = false { didSet { engine.mainMixerNode.outputVolume = muted ? 0 : 1 } }
+
+    init() { engine.attach(node) }
+
+    private func prepare(_ sampleRate: Double) {
+        if format?.sampleRate == sampleRate, engine.isRunning { return }
+        engine.stop()
+        guard let f = AVAudioFormat(commonFormat: .pcmFormatFloat32, sampleRate: sampleRate, channels: 1, interleaved: false) else { return }
+        engine.disconnectNodeOutput(node)
+        engine.connect(node, to: engine.mainMixerNode, format: f)
+        node.removeTap(onBus: 0)
+        let meter = meter
+        node.installTap(onBus: 0, bufferSize: 1024, format: f) { buf, _ in meter.update(buf) }
+        format = f
+        engine.prepare()
+        try? engine.start()
+        node.play()
+    }
+
+    /// 排进一段 16 位单声道 PCM（接在前面排着的声音后面，不会有缝）
+    func enqueue(pcm16 data: Data, sampleRate: Double) {
+        let n = data.count / 2
+        guard n > 0 else { return }
+        prepare(sampleRate)
+        guard let f = format, engine.isRunning,
+              let buf = AVAudioPCMBuffer(pcmFormat: f, frameCapacity: AVAudioFrameCount(n)), let out = buf.floatChannelData?[0] else { return }
+        buf.frameLength = AVAudioFrameCount(n)
+        data.withUnsafeBytes { raw in
+            let src = raw.bindMemory(to: Int16.self)
+            for i in 0..<n { out[i] = Float(Int16(littleEndian: src[i])) / 32768 }
+        }
+        pending += 1
+        let gen = generation
+        if !node.isPlaying { node.play() }
+        node.scheduleBuffer(buf, completionCallbackType: .dataPlayedBack) { [weak self] _ in
+            Task { @MainActor in
+                guard let self, self.generation == gen else { return }
+                self.pending = max(0, self.pending - 1)
+            }
+        }
+    }
+
+    /// 缓存里的整句（我们自己存的 16 位 WAV）
+    func enqueue(wav: Data) -> Bool {
+        guard let (pcm, rate) = WAV.pcm16(wav) else { return false }
+        enqueue(pcm16: pcm, sampleRate: rate)
+        return true
+    }
+
+    /// 打断：清掉所有排队的声音
+    func stop() {
+        generation += 1
+        pending = 0
+        node.stop()
+    }
+}
+
+/// 16 位单声道 WAV 的打包和拆包
+enum WAV {
+    static func wrap(pcm16: Data, sampleRate: Int) -> Data {
+        var d = Data()
+        func u32(_ v: Int) { var x = UInt32(v).littleEndian; d.append(Data(bytes: &x, count: 4)) }
+        func u16(_ v: Int) { var x = UInt16(v).littleEndian; d.append(Data(bytes: &x, count: 2)) }
+        d.append(Data("RIFF".utf8)); u32(36 + pcm16.count); d.append(Data("WAVE".utf8))
+        d.append(Data("fmt ".utf8)); u32(16); u16(1); u16(1); u32(sampleRate); u32(sampleRate * 2); u16(2); u16(16)
+        d.append(Data("data".utf8)); u32(pcm16.count); d.append(pcm16)
+        return d
+    }
+
+    static func pcm16(_ wav: Data) -> (Data, Double)? {
+        let b = [UInt8](wav)
+        guard b.count > 44, String(bytes: b[0..<4], encoding: .ascii) == "RIFF", String(bytes: b[8..<12], encoding: .ascii) == "WAVE" else { return nil }
+        func u32(_ i: Int) -> Int { Int(b[i]) | Int(b[i + 1]) << 8 | Int(b[i + 2]) << 16 | Int(b[i + 3]) << 24 }
+        func u16(_ i: Int) -> Int { Int(b[i]) | Int(b[i + 1]) << 8 }
+        var i = 12, rate = 0, ok = false
+        while i + 8 <= b.count {
+            let id = String(bytes: b[i..<i + 4], encoding: .ascii) ?? "", size = u32(i + 4)
+            if id == "fmt " {
+                ok = u16(i + 8) == 1 && u16(i + 10) == 1 && u16(i + 22) == 16      // PCM、单声道、16 位
+                rate = u32(i + 12)
+            } else if id == "data" {
+                guard ok, rate > 0 else { return nil }
+                return (wav.subdata(in: (i + 8)..<min(b.count, i + 8 + size)), Double(rate))
+            }
+            i += 8 + size + (size & 1)
+        }
+        return nil
+    }
+}
+
 // MARK: - 本机语音缓存：合成过的句子存成文件，下次直接播放（不用联网、不再花钱）
 
 
@@ -205,6 +328,7 @@ enum VoiceCache {
     static func get(_ text: String, _ cfg: VoiceSettings) -> Data? { try? Data(contentsOf: file(text, cfg)) }
     static func has(_ text: String, _ cfg: VoiceSettings) -> Bool { FileManager.default.fileExists(atPath: file(text, cfg).path) }
     static func put(_ data: Data, _ text: String, _ cfg: VoiceSettings) { try? data.write(to: file(text, cfg), options: .atomic) }
+    static func remove(_ text: String, _ cfg: VoiceSettings) { try? FileManager.default.removeItem(at: file(text, cfg)) }
 
     static var usage: (files: Int, bytes: Int) {
         let fs = (try? FileManager.default.contentsOfDirectory(at: dir, includingPropertiesForKeys: [.fileSizeKey])) ?? []
@@ -231,6 +355,9 @@ enum VoiceCache {
 enum Sentences {
     static let pattern = "[\\s\\S]*?[。！？!?\\n…]+"
 
+    /// 一次合成不超过这么多字（约 13 秒）：再长的句子从 ；： ，处拆开，免得长段越念越快、出问题时卡很久
+    static let maxChars = 60
+
     static func split(_ text: String) -> [String] {
         var buf = text, out: [String] = []
         while let r = buf.range(of: pattern, options: .regularExpression) {
@@ -238,7 +365,19 @@ enum Sentences {
             buf.removeSubrange(r)
         }
         out.append(buf)
-        return out.map { $0.trimmingCharacters(in: .whitespacesAndNewlines) }.filter { !$0.isEmpty }
+        return out.flatMap(splitLong).map { $0.trimmingCharacters(in: .whitespacesAndNewlines) }.filter { !$0.isEmpty }
+    }
+
+    private static func splitLong(_ s: String) -> [String] {
+        guard s.count > maxChars else { return [s] }
+        let head = String(s.prefix(maxChars))
+        for sep in ["；", "：", "，", ";", ":", ","] {
+            if let r = head.range(of: sep, options: .backwards), head.distance(from: head.startIndex, to: r.lowerBound) >= 12 {
+                let cut = s.index(s.startIndex, offsetBy: head.distance(from: head.startIndex, to: r.upperBound))
+                return [String(s[..<cut])] + splitLong(String(s[cut...]))
+            }
+        }
+        return [s]      // 60 个字里一个逗号都没有：就整句念
     }
 }
 
@@ -255,6 +394,7 @@ enum VoicePregen {
     /// 北京地域 ¥0.115 / 万字符（国际站 $0.115），只是估算
     static func estimate(_ lines: [String], _ cfg: VoiceSettings) -> String {
         let chars = lines.reduce(0) { $0 + $1.count }
+        if cfg.engine == .local { return "\(chars) 字，本机合成，免费（约每分钟 6～10 句）" }
         let cost = Double(chars) / 10000 * 0.115
         return "\(chars) 字，约 \(cfg.region == .cn ? "¥" : "$")\(String(format: "%.2f", max(cost, 0.01)))"
     }
@@ -366,10 +506,6 @@ final class LocalTTS {
         return fm.isExecutableFile(atPath: python.path) && fm.fileExists(atPath: model.appendingPathComponent("config.json").path)
     }
 
-    nonisolated static func isSoVITS(_ rel: String) -> Bool {
-        FileManager.default.fileExists(atPath: voicesDir.appendingPathComponent(rel).appendingPathComponent("sovits.json").path)
-    }
-
     nonisolated static func voiceExists(_ rel: String) -> Bool {
         !rel.isEmpty && FileManager.default.fileExists(atPath: voicesDir.appendingPathComponent(rel).appendingPathComponent("ref.wav").path)
     }
@@ -387,29 +523,52 @@ final class LocalTTS {
         return out.sorted { $0.localizedStandardCompare($1) == .orderedAscending }
     }
 
+    nonisolated static func isUsable(_ rel: String) -> Bool { voiceExists(rel) && isInstalled }
+
+    /// 调过参数的音色（文件夹里有 voice.json）
+    nonisolated static func isTuned(_ rel: String) -> Bool {
+        FileManager.default.fileExists(atPath: voicesDir.appendingPathComponent(rel).appendingPathComponent("voice.json").path)
+    }
+
+    /// 音色“指纹”：参考录音、原话、合成参数、服务端版本任何一个变了，之前缓存的句子声音就不一样了，不能再用
+    nonisolated static let serverVersion = "srv3"      // 和 server.py 里的 PATCH_VERSION 一致
+    nonisolated static func fingerprint(_ rel: String) -> String {
+        let dir = voicesDir.appendingPathComponent(rel)
+        var h = SHA256()
+        for name in ["voice.json", "ref.txt"] {
+            if let d = try? Data(contentsOf: dir.appendingPathComponent(name)) { h.update(data: d) }
+        }
+        let size = (try? FileManager.default.attributesOfItem(atPath: dir.appendingPathComponent("ref.wav").path)[.size] as? Int) ?? 0
+        h.update(data: Data("\(size)|\(serverVersion)".utf8))
+        return h.finalize().prefix(8).map { String(format: "%02x", $0) }.joined()
+    }
+
+    // MARK: 后台服务
+
     private var process: Process?
     private var starting: Task<Void, Error>?
     private(set) var log = ""
 
-    var running: Bool { process?.isRunning == true }
-
     /// 第一次合成时自动启动后台服务（加载模型约 10~20 秒）
-    func ensureRunning(voice: String) async throws {
-        if running, await healthy() { return }
+    private func ensureRunning(voice: String) async throws {
+        if process?.isRunning == true, await Self.healthy(Self.port) { return }
         if let starting { return try await starting.value }
-        let t = Task { try await start(voice: voice) }
+        let t = Task {
+            guard Self.isInstalled else { throw LLMError(message: "本机语音还没装好（缺少模型或 Python 环境）") }
+            process?.terminate()
+            process = try await launch(Self.python, [Self.serverScript.path, "--model", Self.model.path,
+                                                     "--voice", Self.voicesDir.appendingPathComponent(voice).path,
+                                                     "--port", "\(Self.port)"], port: Self.port, name: "本机语音服务")
+        }
         starting = t
         defer { starting = nil }
         try await t.value
     }
 
-    private func start(voice: String) async throws {
-        guard Self.isInstalled else { throw LLMError(message: "本机语音还没装好（缺少模型或 Python 环境）") }
-        stop()
+    private func launch(_ exe: URL, _ args: [String], port: Int, name: String) async throws -> Process {
         let p = Process()
-        p.executableURL = Self.python
-        p.arguments = [Self.serverScript.path, "--model", Self.model.path,
-                       "--voice", Self.voicesDir.appendingPathComponent(voice).path, "--port", "\(Self.port)"]
+        p.executableURL = exe
+        p.arguments = args
         var env = ProcessInfo.processInfo.environment
         env["HF_HUB_OFFLINE"] = "1"
         env["TRANSFORMERS_OFFLINE"] = "1"
@@ -422,31 +581,59 @@ final class LocalTTS {
             Task { @MainActor in self?.log = String(((self?.log ?? "") + s).suffix(4000)) }
         }
         try p.run()
-        process = p
-        for _ in 0..<180 {                       // 最多等 90 秒
+        for _ in 0..<240 {                       // 最多等 2 分钟
             try await Task.sleep(nanoseconds: 500_000_000)
-            if !p.isRunning { throw LLMError(message: "本机语音服务启动失败：\(log.suffix(300))") }
-            if await healthy() { return }
+            if !p.isRunning { throw LLMError(message: "\(name)启动失败：\(log.suffix(300))") }
+            if await Self.healthy(port) { return p }
         }
-        throw LLMError(message: "本机语音服务启动超时")
+        p.terminate()
+        throw LLMError(message: "\(name)启动超时")
     }
 
     func stop() {
         process?.terminate()
         process = nil
-        SoVITSService.shared.stop()
     }
 
-    private func healthy() async -> Bool {
-        var r = URLRequest(url: URL(string: "http://127.0.0.1:\(Self.port)/health")!, timeoutInterval: 2)
+    private nonisolated static func healthy(_ port: Int) async -> Bool {
+        var r = URLRequest(url: URL(string: "http://127.0.0.1:\(port)/health")!, timeoutInterval: 2)
         r.httpMethod = "GET"
         return ((try? await URLSession.shared.data(for: r))?.1 as? HTTPURLResponse)?.statusCode == 200
     }
 
-    func synthesize(_ text: String, voice: String) async throws -> Data {
-        if Self.isSoVITS(voice) {        // 训练好的 GPT-SoVITS 音色
-            return try await SoVITSService.shared.synthesize(text, voiceDir: Self.voicesDir.appendingPathComponent(voice))
+    /// 边合成边返回 16 位单声道 PCM 片段，第一段大约 0.3 秒就到
+    func stream(_ text: String, voice: String) async throws -> (sampleRate: Double, chunks: AsyncThrowingStream<Data, Error>) {
+        try await ensureRunning(voice: voice)
+        var r = URLRequest(url: URL(string: "http://127.0.0.1:\(Self.port)/tts_stream")!, timeoutInterval: 60)
+        r.httpMethod = "POST"
+        r.setValue("application/json", forHTTPHeaderField: "Content-Type")
+        r.httpBody = try JSONSerialization.data(withJSONObject: ["text": text, "voice": Self.voicesDir.appendingPathComponent(voice).path])
+        let (bytes, resp) = try await URLSession.shared.bytes(for: r)
+        guard let h = resp as? HTTPURLResponse else { throw LLMError(message: "本机语音服务没有回应") }
+        guard h.statusCode == 200 else {
+            var body = Data()
+            for try await b in bytes { body.append(b); if body.count > 300 { break } }
+            throw LLMError(message: "本机语音合成失败：\(String(decoding: body, as: UTF8.self))")
         }
+        let rate = Double(h.value(forHTTPHeaderField: "X-Sample-Rate") ?? "") ?? 24000
+        let chunks = AsyncThrowingStream<Data, Error> { cont in
+            let task = Task.detached {
+                var buf = Data()
+                do {
+                    for try await b in bytes {
+                        buf.append(b)
+                        if buf.count >= 4800 { cont.yield(buf); buf = Data() }      // 每 0.1 秒交一次
+                    }
+                    if buf.count >= 2 { cont.yield(buf.prefix(buf.count & ~1)) }
+                    cont.finish()
+                } catch { cont.finish(throwing: error) }
+            }
+            cont.onTermination = { _ in task.cancel() }     // 被打断时断开连接，服务那边也停下
+        }
+        return (rate, chunks)
+    }
+
+    func synthesize(_ text: String, voice: String) async throws -> Data {
         try await ensureRunning(voice: voice)
         var r = URLRequest(url: URL(string: "http://127.0.0.1:\(Self.port)/tts")!, timeoutInterval: 120)
         r.httpMethod = "POST"
@@ -455,134 +642,6 @@ final class LocalTTS {
         let (data, resp) = try await URLSession.shared.data(for: r)
         guard (resp as? HTTPURLResponse)?.statusCode == 200, data.count > 1000 else {
             throw LLMError(message: "本机语音合成失败：\(String(decoding: data.prefix(300), as: UTF8.self))")
-        }
-        return data
-    }
-}
-
-// MARK: - 本机训练的音色（GPT-SoVITS）：音色文件夹里有 sovits.json 就走这里
-
-struct SoVITSProfile: Codable, Equatable {
-    var gpt: String              // 训练好的 GPT 权重（.ckpt）
-    var sovits: String           // 训练好的 SoVITS 权重（.pth）
-    var refText: String          // ref.wav 里说的原话
-    var refLang: String = "ja"   // ref.wav 的语言
-    var textLang: String = "zh"  // 要说的语言
-    var device: String = "cpu"
-}
-
-@MainActor
-final class SoVITSService {
-    static let shared = SoVITSService()
-    nonisolated static let port = 9880
-    nonisolated static var dir: URL { LocalTTS.root.appendingPathComponent("GPT-SoVITS") }
-    nonisolated static var python: URL { LocalTTS.root.appendingPathComponent("sovits-venv/bin/python") }
-    nonisolated static var isInstalled: Bool {
-        FileManager.default.isExecutableFile(atPath: python.path)
-            && FileManager.default.fileExists(atPath: dir.appendingPathComponent("api_v2.py").path)
-    }
-
-    nonisolated static func profile(_ voiceDir: URL) -> SoVITSProfile? {
-        guard let d = try? Data(contentsOf: voiceDir.appendingPathComponent("sovits.json")) else { return nil }
-        return try? JSONDecoder().decode(SoVITSProfile.self, from: d)
-    }
-
-    private var process: Process?
-    private var loaded: SoVITSProfile?
-    private var starting: Task<Void, Error>?
-    private(set) var log = ""
-
-    func stop() {
-        process?.terminate()
-        process = nil
-        loaded = nil
-    }
-
-    private func healthy() async -> Bool {
-        // api_v2 没有 /health，用 /docs 判断服务是否起来了
-        var r = URLRequest(url: URL(string: "http://127.0.0.1:\(Self.port)/docs")!, timeoutInterval: 2)
-        r.httpMethod = "GET"
-        return ((try? await URLSession.shared.data(for: r))?.1 as? HTTPURLResponse)?.statusCode == 200
-    }
-
-    private func ensureRunning(_ p: SoVITSProfile, voiceDir: URL) async throws {
-        if process?.isRunning == true, await healthy() {
-            if loaded != p { try await switchWeights(p) }
-            return
-        }
-        if let starting { return try await starting.value }
-        let t = Task { try await start(p, voiceDir: voiceDir) }
-        starting = t
-        defer { starting = nil }
-        try await t.value
-    }
-
-    private func start(_ p: SoVITSProfile, voiceDir: URL) async throws {
-        guard Self.isInstalled else { throw LLMError(message: "GPT-SoVITS 还没装好") }
-        stop()
-        let cfg = """
-        custom:
-          bert_base_path: GPT_SoVITS/pretrained_models/chinese-roberta-wwm-ext-large
-          cnhuhbert_base_path: GPT_SoVITS/pretrained_models/chinese-hubert-base
-          device: \(p.device)
-          is_half: false
-          t2s_weights_path: \(p.gpt)
-          version: v2ProPlus
-          vits_weights_path: \(p.sovits)
-        """
-        let cfgURL = voiceDir.appendingPathComponent("tts_infer.yaml")
-        try cfg.write(to: cfgURL, atomically: true, encoding: .utf8)
-        let proc = Process()
-        proc.executableURL = Self.python
-        proc.currentDirectoryURL = Self.dir
-        proc.arguments = ["-s", "api_v2.py", "-a", "127.0.0.1", "-p", "\(Self.port)", "-c", cfgURL.path]
-        var env = ProcessInfo.processInfo.environment
-        env["PYTHONPATH"] = Self.dir.path + ":" + Self.dir.appendingPathComponent("GPT_SoVITS").path
-        env["HF_HUB_OFFLINE"] = "1"
-        env["TRANSFORMERS_OFFLINE"] = "1"
-        proc.environment = env
-        let pipe = Pipe()
-        proc.standardOutput = pipe
-        proc.standardError = pipe
-        pipe.fileHandleForReading.readabilityHandler = { [weak self] h in
-            let s = String(decoding: h.availableData, as: UTF8.self)
-            Task { @MainActor in self?.log = String(((self?.log ?? "") + s).suffix(4000)) }
-        }
-        try proc.run()
-        process = proc
-        for _ in 0..<240 {                       // 最多等 2 分钟
-            try await Task.sleep(nanoseconds: 500_000_000)
-            if !proc.isRunning { throw LLMError(message: "GPT-SoVITS 服务启动失败：\(log.suffix(300))") }
-            if await healthy() { loaded = p; return }
-        }
-        throw LLMError(message: "GPT-SoVITS 服务启动超时")
-    }
-
-    private func switchWeights(_ p: SoVITSProfile) async throws {
-        for (ep, path) in [("set_gpt_weights", p.gpt), ("set_sovits_weights", p.sovits)] {
-            var c = URLComponents(string: "http://127.0.0.1:\(Self.port)/\(ep)")!
-            c.queryItems = [URLQueryItem(name: "weights_path", value: path)]
-            _ = try await URLSession.shared.data(from: c.url!)
-        }
-        loaded = p
-    }
-
-    func synthesize(_ text: String, voiceDir: URL) async throws -> Data {
-        guard let p = Self.profile(voiceDir) else { throw LLMError(message: "音色配置不完整") }
-        try await ensureRunning(p, voiceDir: voiceDir)
-        var r = URLRequest(url: URL(string: "http://127.0.0.1:\(Self.port)/tts")!, timeoutInterval: 180)
-        r.httpMethod = "POST"
-        r.setValue("application/json", forHTTPHeaderField: "Content-Type")
-        r.httpBody = try JSONSerialization.data(withJSONObject: [
-            "text": text, "text_lang": p.textLang,
-            "ref_audio_path": voiceDir.appendingPathComponent("ref.wav").path,
-            "prompt_text": p.refText, "prompt_lang": p.refLang,
-            "text_split_method": "cut5", "batch_size": 1, "media_type": "wav", "streaming_mode": false,
-            "top_k": 15, "top_p": 1, "temperature": 1, "repetition_penalty": 1.35, "parallel_infer": false,
-        ] as [String: Any])
-        let (data, resp) = try await URLSession.shared.data(for: r)
-        guard (resp as? HTTPURLResponse)?.statusCode == 200, data.count > 1000 else {
-            throw LLMError(message: "GPT-SoVITS 合成失败：\(String(decoding: data.prefix(300), as: UTF8.self))")
         }
         return data
     }

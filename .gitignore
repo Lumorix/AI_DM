@@ -15,4 +15,36 @@ yachiyo-qwen-voice-reply-main/
 AI_voice_training/
 
 # 应用数据：剧本、存档、语音模型、训练结果（本机用，不上传）
-data/
+/data/
+
+# 打包给别的电脑的文件夹和 zip
+dist/
+
+# 本机环境、密钥和缓存
+__MACOSX/
+.env
+.env.*
+!.env.example
+!.env.*.example
+config.yaml
+voice_config.local.json
+.venv/
+venv/
+__pycache__/
+*.pyc
+*.pyo
+.pytest_cache/
+.mypy_cache/
+.ruff_cache/
+.coverage
+.coverage.*
+htmlcov/
+*.log
+*.tmp
+*.cache
+
+# 模型权重（即使放到 data 目录之外也不应提交）
+*.safetensors
+*.ckpt
+*.pth
+*.pt
